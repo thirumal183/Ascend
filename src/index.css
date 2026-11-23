@@ -5,6 +5,11 @@
     --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+
+    /* Pathway Colors */
+    --pathway-emerald: #10B981;
+    --pathway-sky: #0284C7;
+    --pathway-amber: #F59E0B;
   }
 
   body {
@@ -27,21 +32,55 @@
   }
 }
 
-/* Subtle elevation and card utility classes */
+/* Elevated card surfaces */
 .ascend-card {
   background-color: #ffffff;
   border: 1px solid rgba(226, 232, 240, 0.85);
-  border-radius: 1rem;
+  border-radius: 1.25rem;
   box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 1px 2px -1px rgba(15, 23, 42, 0.02);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ascend-card:hover {
-  border-color: rgba(203, 213, 225, 0.9);
+  border-color: rgba(203, 213, 225, 0.95);
+  box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.05);
 }
 
-.ascend-card-glow {
-  box-shadow: 0 4px 20px -2px rgba(2, 132, 199, 0.08);
+.ascend-card-interactive {
+  background-color: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  border-radius: 1.25rem;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ascend-card-interactive:hover {
+  transform: translateY(-2px);
+  border-color: rgba(148, 163, 184, 0.6);
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.06);
+}
+
+.ascend-dark-card {
+  background-color: #0B1221;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.25rem;
+  color: #F8FAFC;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.3);
+}
+
+/* Shimmer Skeleton loader */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
 }
 
 @keyframes ascendPageEnter {

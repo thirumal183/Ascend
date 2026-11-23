@@ -24,6 +24,7 @@ interface SidebarProps {
   onSignOut: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  onViewLandingPage?: () => void;
 }
 
 interface NavItemConfig {
@@ -54,6 +55,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSignOut,
   mobileOpen,
   onCloseMobile,
+  onViewLandingPage,
 }) => {
   const handleNav = (tab: NavigationTab) => {
     onSelectTab(tab);
@@ -197,6 +199,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <Settings className="h-4 w-4 text-slate-500 hover:text-slate-300 shrink-0 transition-colors" />
           </button>
+
+          {onViewLandingPage && (
+            <button
+              type="button"
+              onClick={onViewLandingPage}
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-sky-300 hover:bg-slate-800/60 transition-colors"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-sky-400" />
+              <span>View Product Landing</span>
+            </button>
+          )}
 
           <button
             type="button"

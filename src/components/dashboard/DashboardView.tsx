@@ -115,6 +115,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigate,
 }) => {
   const [dateIdx, setDateIdx] = useState(1);
+  const [previewSkeleton, setPreviewSkeleton] = useState(false);
 
   const dailyTotals = computeDailyTotals(intakeRecords);
 
@@ -289,6 +290,77 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Quick Action Dock */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">
+              Quick Dock:
+            </span>
+            <button
+              type="button"
+              onClick={() => onNavigate(NavigationTab.Diet)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-200/70 transition-all active:scale-[0.98]"
+            >
+              <Plus className="h-3.5 w-3.5 text-sky-600" />
+              <span>Log Food</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onUpdateWater(250)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-cyan-800 bg-cyan-50 hover:bg-cyan-100 border border-cyan-200/70 transition-all active:scale-[0.98]"
+            >
+              <Droplets className="h-3.5 w-3.5 text-cyan-600" />
+              <span>+250ml Water</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate(NavigationTab.Workouts)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/70 transition-all active:scale-[0.98]"
+            >
+              <Dumbbell className="h-3.5 w-3.5 text-emerald-600" />
+              <span>Start Workout</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate(NavigationTab.Progress)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/80 transition-all active:scale-[0.98]"
+            >
+              <TrendingUp className="h-3.5 w-3.5 text-slate-600" />
+              <span>Check-In</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setPreviewSkeleton(!previewSkeleton)}
+            className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 transition-colors px-2.5 py-1 rounded-lg hover:bg-slate-100"
+            title="Inspect loading skeleton state"
+          >
+            {previewSkeleton ? 'Hide Skeletons' : 'Preview Skeletons'}
+          </button>
+        </div>
+
+        {/* Skeleton State Preview */}
+        {previewSkeleton && (
+          <div className="space-y-4 p-6 rounded-2xl bg-white border border-sky-200/80 animate-fade-in" aria-label="Loading skeleton preview">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-sky-700 uppercase tracking-wider">
+                Skeleton Loading State Simulation
+              </span>
+              <span className="text-xs text-slate-400">Pulsing content placeholders</span>
+            </div>
+            <div className="h-6 w-48 rounded-lg skeleton-shimmer" />
+            <div className="h-10 w-72 rounded-lg skeleton-shimmer" />
+            <div className="h-3 w-full rounded-full skeleton-shimmer" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <div className="h-20 rounded-xl skeleton-shimmer" />
+              <div className="h-20 rounded-xl skeleton-shimmer" />
+              <div className="h-20 rounded-xl skeleton-shimmer" />
+              <div className="h-20 rounded-xl skeleton-shimmer" />
+            </div>
+          </div>
+        )}
 
         {/* HERO CALORIE & DAILY PROGRESS CARD */}
         <div className="bg-white border border-slate-200/85 rounded-2xl p-6 sm:p-7 shadow-[0_1px_3px_rgba(0,0,0,0.03)] space-y-6">

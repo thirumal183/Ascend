@@ -10,6 +10,7 @@ import { AiCoachView } from './components/coach/AiCoachView';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { DietManagementView } from './components/diet/DietManagementView';
 import { GoalsProfileView } from './components/goals/GoalsProfileView';
+import { LandingPageView } from './components/landing/LandingPageView';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopHeader } from './components/layout/TopHeader';
 import { ProgressTrackingView } from './components/progress/ProgressTrackingView';
@@ -99,6 +100,13 @@ export default function App() {
     undefined
   );
 
+  const [showLandingPage, setShowLandingPage] = useState<boolean>(
+    !savedSession?.account?.isAuthenticated
+  );
+  const [authInitialScreen, setAuthInitialScreen] = useState<
+    'welcome' | 'signin' | 'signup' | 'demo_select' | 'onboarding'
+  >('welcome');
+
   // Persist session changes to localStorage (without any passwords)
   useEffect(() => {
     if (userAccount.isAuthenticated && userAccount.onboardingCompleted) {
@@ -183,10 +191,29 @@ export default function App() {
     setActiveTab(NavigationTab.Dashboard);
   };
 
+  // Direct Demo entry from Landing Page
+  const handleDirectDemoEntry = () => {
+    handleCompleteAuthAndOnboarding({
+      account: {
+        name: 'Alex Rivera',
+        email: 'alex.rivera@ascend.app',
+        isAuthenticated: true,
+        onboardingCompleted: true,
+        isDemoAccount: true,
+        rememberMe: true,
+      },
+      profile: INITIAL_USER_PROFILE,
+      goals: INITIAL_NUTRITION_GOALS,
+      preloadDemoData: true,
+    });
+    setShowLandingPage(false);
+  };
+
   // Sign Out / Switch Profile
   const handleSignOut = () => {
     prototypeSessionStorage.clear();
     setUserAccount(DEFAULT_UNAUTHENTICATED_ACCOUNT);
+    setShowLandingPage(true);
     setActiveTab(NavigationTab.Dashboard);
   };
 
@@ -357,10 +384,29 @@ export default function App() {
     setUsingDemoData(true);
   };
 
+  // Public Product Landing Page
+  if (showLandingPage) {
+    return (
+      <LandingPageView
+        onStartOnboarding={() => {
+          setAuthInitialScreen('onboarding');
+          setShowLandingPage(false);
+        }}
+        onOpenSignIn={() => {
+          setAuthInitialScreen('signin');
+          setShowLandingPage(false);
+        }}
+        onExploreDemo={handleDirectDemoEntry}
+      />
+    );
+  }
+
   // Show Authentication & Onboarding Entry Flow if not signed in
   if (!userAccount.isAuthenticated || !userAccount.onboardingCompleted) {
     return (
       <AuthOnboardingFlow
+        initialScreen={authInitialScreen}
+        onBackToLanding={() => setShowLandingPage(true)}
         onCompleteAuthAndOnboarding={handleCompleteAuthAndOnboarding}
       />
     );
@@ -382,6 +428,7 @@ export default function App() {
         onSignOut={handleSignOut}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
+        onViewLandingPage={() => setShowLandingPage(true)}
       />
 
       {/* Main Content Area */}
@@ -392,6 +439,7 @@ export default function App() {
           usingDemoData={usingDemoData}
           onSelectTab={(tab) => handleNavigate(tab)}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
+          onViewLandingPage={() => setShowLandingPage(true)}
         />
 
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pt-6">

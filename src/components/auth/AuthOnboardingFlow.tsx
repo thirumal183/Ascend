@@ -38,6 +38,8 @@ type AuthScreenStep =
   | 'onboarding';
 
 interface AuthOnboardingFlowProps {
+  initialScreen?: AuthScreenStep;
+  onBackToLanding?: () => void;
   onCompleteAuthAndOnboarding: (payload: {
     account: UserAccount;
     profile: UserProfile;
@@ -100,9 +102,11 @@ const PATHWAY_CARDS: {
 ];
 
 export const AuthOnboardingFlow: React.FC<AuthOnboardingFlowProps> = ({
+  initialScreen = 'welcome',
+  onBackToLanding,
   onCompleteAuthAndOnboarding,
 }) => {
-  const [screen, setScreen] = useState<AuthScreenStep>('welcome');
+  const [screen, setScreen] = useState<AuthScreenStep>(initialScreen);
 
   // Sign In form state
   const [signInEmail, setSignInEmail] = useState('');
@@ -484,7 +488,13 @@ export const AuthOnboardingFlow: React.FC<AuthOnboardingFlowProps> = ({
       <header className="w-full max-w-5xl mx-auto flex items-center justify-between">
         <button
           type="button"
-          onClick={() => setScreen('welcome')}
+          onClick={() => {
+            if (onBackToLanding) {
+              onBackToLanding();
+            } else {
+              setScreen('welcome');
+            }
+          }}
           className="flex items-center gap-2.5 text-left focus:outline-none group"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0B1221] text-sky-400 transition-transform duration-150 group-hover:scale-105">
@@ -502,6 +512,15 @@ export const AuthOnboardingFlow: React.FC<AuthOnboardingFlowProps> = ({
 
         {screen === 'welcome' ? (
           <div className="flex items-center gap-2.5">
+            {onBackToLanding && (
+              <button
+                type="button"
+                onClick={onBackToLanding}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                Home
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -526,11 +545,17 @@ export const AuthOnboardingFlow: React.FC<AuthOnboardingFlowProps> = ({
         ) : (
           <button
             type="button"
-            onClick={() => setScreen('welcome')}
+            onClick={() => {
+              if (onBackToLanding && screen !== 'onboarding') {
+                onBackToLanding();
+              } else {
+                setScreen('welcome');
+              }
+            }}
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            <span>Back to Welcome</span>
+            <span>{onBackToLanding && screen !== 'onboarding' ? 'Back to Home' : 'Back to Welcome'}</span>
           </button>
         )}
       </header>
