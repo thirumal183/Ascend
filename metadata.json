@@ -1,0 +1,6 @@
+{
+  "name": "ASCEND — AI Nutrition & Fitness Platform",
+  "description": "ASCEND (Getting Better Every Day) is a nutrition, fitness, and sports-performance platform for tracking macronutrients, workouts, biometric progress, and personalized AI-assisted coaching.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
