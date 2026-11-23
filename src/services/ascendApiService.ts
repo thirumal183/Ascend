@@ -168,6 +168,14 @@ export function calculateScaledNutrients(
       food.nutrients.potassiumMg != null
         ? roundInt(food.nutrients.potassiumMg * ratio)
         : null,
+    calciumMg:
+      food.nutrients.calciumMg != null
+        ? roundInt(food.nutrients.calciumMg * ratio)
+        : null,
+    ironMg:
+      food.nutrients.ironMg != null
+        ? round1(food.nutrients.ironMg * ratio)
+        : null,
   };
 }
 
@@ -185,6 +193,8 @@ export function computeDailyTotals(
   let sugarG = 0;
   let sodiumMg = 0;
   let potassiumMg = 0;
+  let calciumMg = 0;
+  let ironMg = 0;
   let incompleteCount = 0;
 
   for (const rec of records) {
@@ -197,6 +207,8 @@ export function computeDailyTotals(
     if (n.sugarG != null) sugarG += n.sugarG;
     if (n.sodiumMg != null) sodiumMg += n.sodiumMg;
     if (n.potassiumMg != null) potassiumMg += n.potassiumMg;
+    if (n.calciumMg != null) calciumMg += n.calciumMg;
+    if (n.ironMg != null) ironMg += n.ironMg;
 
     if (n.fiberG == null || n.potassiumMg == null) {
       incompleteCount += 1;
@@ -214,12 +226,14 @@ export function computeDailyTotals(
     sugarG: round1(sugarG),
     sodiumMg: Math.round(sodiumMg),
     potassiumMg: Math.round(potassiumMg),
+    calciumMg: Math.round(calciumMg),
+    ironMg: round1(ironMg),
     incompleteCount,
   };
 }
 
 /**
- * Filters sample food items by search query and category.
+ * Filters sample food items by search query and category with alternate names and regional aliases support.
  */
 export function filterFoodCatalog(
   catalog: FoodItem[],
@@ -233,7 +247,10 @@ export function filterFoodCatalog(
       q.length === 0 ||
       item.name.toLowerCase().includes(q) ||
       item.brandOrSource.toLowerCase().includes(q) ||
-      item.category.toLowerCase().includes(q);
+      item.category.toLowerCase().includes(q) ||
+      (item.alternateNames &&
+        item.alternateNames.some((alt) => alt.toLowerCase().includes(q))) ||
+      (item.cuisineRegion && item.cuisineRegion.toLowerCase().includes(q));
     return matchesCategory && matchesSearch;
   });
 }

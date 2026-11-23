@@ -1,17 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
+  ArrowRightLeft,
   Check,
   ChevronDown,
   ChevronUp,
   Coffee,
   Edit3,
+  Eye,
   Flame,
   Info,
   Loader2,
   Moon,
   Plus,
   RotateCcw,
+  Scale,
   Search,
   Sparkles,
   Sun,
@@ -33,6 +36,8 @@ import {
   NutritionGoals,
   ServingUnit,
 } from '../../types/ascend';
+import { FoodDetailsModal } from './FoodDetailsModal';
+import { FoodComparisonModal } from './FoodComparisonModal';
 
 interface DietManagementViewProps {
   foodCatalog: FoodItem[];
@@ -52,6 +57,8 @@ interface DietManagementViewProps {
 const FOOD_CATEGORIES: FoodCategory[] = [
   'All',
   'Protein Sources',
+  'Indian Breads & Roti',
+  'Dals, Pulses & Curries',
   'Grains & Oats',
   'Produce',
   'Dairy & Alternatives',
@@ -109,6 +116,34 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
   const [editQty, setEditQty] = useState<number>(100);
   const [editUnit, setEditUnit] = useState<ServingUnit>('g');
   const [editMeal, setEditMeal] = useState<MealType>(MealType.Breakfast);
+
+  // Nutrition Intelligence Modal States
+  const [modalFood, setModalFood] = useState<FoodItem | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [comparisonFoodIds, setComparisonFoodIds] = useState<string[]>([
+    'food-chicken-breast',
+    'food-paneer',
+    'food-toor-dal',
+  ]);
+  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
+
+  const handleOpenDetails = (food: FoodItem) => {
+    setModalFood(food);
+    setIsDetailsOpen(true);
+  };
+
+  const handleToggleCompare = (foodId: string) => {
+    setComparisonFoodIds((prev) => {
+      if (prev.includes(foodId)) {
+        return prev.filter((id) => id !== foodId);
+      }
+      if (prev.length >= 3) {
+        // Replace oldest or keep max 3
+        return [...prev.slice(1), foodId];
+      }
+      return [...prev, foodId];
+    });
+  };
 
   useEffect(() => {
     if (initialMeal) {
@@ -412,51 +447,62 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
           aria-label="Search and Select Food"
           className="lg:col-span-7 bg-white border border-slate-200/80 rounded-2xl p-6 space-y-5"
         >
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h2 className="font-display text-lg font-bold text-slate-900">
                 1. Find a Food
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Sample reference catalogue ({filteredFoods.length} items shown)
+                Authentic Indian & global reference catalogue ({filteredFoods.length} items shown)
               </p>
             </div>
 
-            {/* Subtle State Tester for Demo Review */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setCatalogState('normal')}
-                className={`px-2 py-1 rounded font-medium transition-colors ${
-                  catalogState === 'normal'
-                    ? 'bg-white text-slate-900 shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
+                onClick={() => setIsComparisonOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 rounded-xl transition-all shadow-2xs"
               >
-                Normal
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+                <span>Compare ({comparisonFoodIds.length})</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setCatalogState('loading')}
-                className={`px-2 py-1 rounded font-medium transition-colors ${
-                  catalogState === 'loading'
-                    ? 'bg-white text-slate-900 shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Loading
-              </button>
-              <button
-                type="button"
-                onClick={() => setCatalogState('error')}
-                className={`px-2 py-1 rounded font-medium transition-colors ${
-                  catalogState === 'error'
-                    ? 'bg-white text-slate-900 shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Error
-              </button>
+
+              {/* Subtle State Tester for Demo Review */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs">
+                <button
+                  type="button"
+                  onClick={() => setCatalogState('normal')}
+                  className={`px-2 py-1 rounded font-medium transition-colors ${
+                    catalogState === 'normal'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Normal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogState('loading')}
+                  className={`px-2 py-1 rounded font-medium transition-colors ${
+                    catalogState === 'loading'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Loading
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogState('error')}
+                  className={`px-2 py-1 rounded font-medium transition-colors ${
+                    catalogState === 'error'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Error
+                </button>
+              </div>
             </div>
           </div>
 
@@ -554,35 +600,96 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
               <div className="divide-y divide-slate-100">
                 {filteredFoods.map((food) => {
                   const isSelected = selectedFood.id === food.id;
+                  const isCompared = comparisonFoodIds.includes(food.id);
+                  const prepLabel =
+                    food.preparationState === 'raw'
+                      ? 'Raw'
+                      : food.preparationState === 'composite_dish'
+                        ? 'Recipe'
+                        : food.preparationState === 'packaged'
+                          ? 'Packaged'
+                          : 'Cooked';
+
                   return (
-                    <button
+                    <div
                       key={food.id}
-                      type="button"
-                      onClick={() => handleSelectFood(food)}
-                      className={`w-full py-3.5 px-3.5 text-left flex items-center justify-between gap-4 rounded-xl transition-all ${
+                      className={`w-full py-3 px-3.5 flex items-center justify-between gap-3 rounded-2xl transition-all ${
                         isSelected
-                          ? 'bg-sky-50/80 border border-sky-200'
-                          : 'hover:bg-slate-50 border border-transparent'
+                          ? 'bg-sky-50/90 border border-sky-300 shadow-2xs'
+                          : 'hover:bg-slate-50/90 border border-transparent'
                       }`}
                     >
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 truncate">
-                          {food.name}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {food.category} · Per {food.referenceLabel}
-                        </p>
+                      {/* Clickable Area to Select Food for Portion Builder */}
+                      <button
+                        type="button"
+                        onClick={() => handleSelectFood(food)}
+                        className="flex-1 text-left min-w-0 flex items-center justify-between gap-3 cursor-pointer group"
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-sm font-semibold text-slate-900 group-hover:text-sky-700 transition-colors truncate">
+                              {food.name}
+                            </p>
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                              {prepLabel}
+                            </span>
+                            {food.cuisineRegion && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700">
+                                {food.cuisineRegion}
+                              </span>
+                            )}
+                          </div>
+                          {food.alternateNames && food.alternateNames.length > 0 && (
+                            <p className="text-[11px] text-slate-400 truncate">
+                              {food.alternateNames.slice(0, 3).join(' · ')}
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-500">
+                            {food.category} · Per {food.referenceLabel}
+                          </p>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="font-mono text-sm font-bold text-slate-900 block">
+                            {food.nutrients.calories} kcal
+                          </span>
+                          <span className="text-xs text-slate-500 font-mono">
+                            P {food.nutrients.proteinG}g · C {food.nutrients.carbsG}g · F{' '}
+                            {food.nutrients.fatG}g
+                          </span>
+                        </div>
+                      </button>
+
+                      {/* Quick Action Buttons: Details Modal & Compare Toggle */}
+                      <div className="flex items-center gap-1 shrink-0 pl-2 border-l border-slate-200/60">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDetails(food)}
+                          className="p-1.5 text-slate-400 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors"
+                          title="View full nutrient laboratory specs & provenance"
+                          aria-label={`View details for ${food.name}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCompare(food.id)}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            isCompared
+                              ? 'text-sky-700 bg-sky-100'
+                              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                          }`}
+                          title={
+                            isCompared
+                              ? 'Remove from comparison'
+                              : 'Add to side-by-side comparison'
+                          }
+                          aria-label={`Compare ${food.name}`}
+                        >
+                          <ArrowRightLeft className="h-4 w-4" />
+                        </button>
                       </div>
-                      <div className="text-right shrink-0">
-                        <span className="font-mono text-sm font-bold text-slate-900 block">
-                          {food.nutrients.calories} kcal
-                        </span>
-                        <span className="text-xs text-slate-500 font-mono">
-                          P {food.nutrients.proteinG}g · C{' '}
-                          {food.nutrients.carbsG}g · F {food.nutrients.fatG}g
-                        </span>
-                      </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -595,17 +702,27 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
           aria-label="Configure Portion and Add Food"
           className="lg:col-span-5 bg-white border border-slate-200/80 rounded-2xl p-6 space-y-5"
         >
-          <div className="pb-4 border-b border-slate-100">
-            <span className="text-xs font-semibold text-sky-600">
-              2. Customize Portion & Meal
-            </span>
-            <h2 className="mt-1 font-display text-lg font-bold text-slate-900">
-              {selectedFood.name}
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Reference serving: {selectedFood.referenceLabel} (
-              {selectedFood.brandOrSource})
-            </p>
+          <div className="pb-4 border-b border-slate-100 flex items-start justify-between gap-3">
+            <div>
+              <span className="text-xs font-semibold text-sky-600">
+                2. Customize Portion & Meal
+              </span>
+              <h2 className="mt-1 font-display text-lg font-bold text-slate-900">
+                {selectedFood.name}
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Reference serving: {selectedFood.referenceLabel} (
+                {selectedFood.brandOrSource})
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleOpenDetails(selectedFood)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-xl transition-colors shrink-0 border border-sky-100"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              <span>Full Specs</span>
+            </button>
           </div>
 
           <form onSubmit={handleConfirmAddFood} className="space-y-5">
@@ -1007,6 +1124,24 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
           </div>
         )}
       </section>
+
+      {/* Food Details Modal */}
+      <FoodDetailsModal
+        food={modalFood}
+        isOpen={isDetailsOpen}
+        onClose={() => setIsDetailsOpen(false)}
+        onSelectForLog={(food) => handleSelectFood(food)}
+      />
+
+      {/* Food Comparison Modal */}
+      <FoodComparisonModal
+        allFoods={foodCatalog}
+        selectedFoodIds={comparisonFoodIds}
+        isOpen={isComparisonOpen}
+        onClose={() => setIsComparisonOpen(false)}
+        onRemoveFood={(id) => handleToggleCompare(id)}
+        onAddFoodToCompare={(id) => handleToggleCompare(id)}
+      />
     </div>
   );
 };

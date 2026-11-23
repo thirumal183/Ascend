@@ -52,12 +52,30 @@ export type FoodCategory =
   | 'All'
   | 'Protein Sources'
   | 'Grains & Oats'
+  | 'Indian Breads & Roti'
+  | 'Dals, Pulses & Curries'
   | 'Produce'
   | 'Dairy & Alternatives'
   | 'Sports Supplements'
   | 'Prepared Meals';
 
 export type ServingUnit = 'g' | 'oz' | 'serving' | 'ml' | 'cup';
+
+export type PreparationState = 'raw' | 'cooked' | 'packaged' | 'composite_dish';
+
+export type VerificationStatus =
+  | 'verified_reference'
+  | 'packaged_label'
+  | 'user_entered'
+  | 'demonstration';
+
+export interface SourceProvenance {
+  sourceName: string;
+  sourceId?: string;
+  retrievalDate?: string;
+  verificationStatus: VerificationStatus;
+  licenseType: 'Public Domain (CC0)' | 'Curated Prototype / Demo' | 'ODbL' | 'Proprietary Label';
+}
 
 export interface UserAccount {
   name: string;
@@ -77,18 +95,31 @@ export interface NutrientValues {
   sugarG?: number | null;
   sodiumMg?: number | null;
   potassiumMg?: number | null;
+  calciumMg?: number | null;
+  ironMg?: number | null;
 }
 
 export interface FoodItem {
   id: string;
   name: string;
+  alternateNames?: string[];
   brandOrSource: string;
   category: Exclude<FoodCategory, 'All'>;
+  cuisineRegion?:
+    | 'South Indian'
+    | 'North Indian'
+    | 'Pan-Indian'
+    | 'Global / Western'
+    | 'Sports Nutrition';
+  preparationState?: PreparationState;
   referenceQuantity: number;
   referenceUnit: 'g' | 'ml' | 'serving';
   referenceLabel: string;
   gramsPerServing: number;
+  ediblePortionPct?: number;
   nutrients: NutrientValues;
+  nutrientsPer100g?: NutrientValues;
+  sourceProvenance?: SourceProvenance;
   isMicronutrientComplete: boolean;
   dataNote?: string;
 }
