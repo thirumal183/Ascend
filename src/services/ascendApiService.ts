@@ -127,24 +127,42 @@ export function calculateScaledNutrients(
   unit: ServingUnit
 ): NutrientValues {
   const safeQty = Math.max(0, Number.isFinite(quantity) ? quantity : 0);
+  const refUnit: string = food.referenceUnit;
+  const refLabel = (food.referenceLabel || '').toLowerCase();
 
-  let totalGrams = safeQty;
-  if (unit === 'g' || unit === 'ml') {
-    totalGrams = safeQty;
-  } else if (unit === 'oz') {
-    totalGrams = safeQty * 28.3495;
-  } else if (unit === 'serving') {
-    totalGrams = safeQty * food.gramsPerServing;
-  } else if (unit === 'cup') {
-    totalGrams = safeQty * 225;
+  let ratio = 0;
+  if (unit === refUnit) {
+    ratio = food.referenceQuantity > 0 ? safeQty / food.referenceQuantity : 0;
+  } else {
+    let baseGrams = food.referenceQuantity;
+    if (refUnit === 'serving') {
+      baseGrams = food.gramsPerServing * food.referenceQuantity;
+    } else if (refUnit === 'oz') {
+      baseGrams = food.referenceQuantity * 28.3495;
+    } else if (refUnit === 'cup') {
+      baseGrams =
+        refLabel.includes('cup') && food.gramsPerServing > 0
+          ? food.referenceQuantity * food.gramsPerServing
+          : food.referenceQuantity * 240;
+    }
+
+    let totalGrams = safeQty;
+    if (unit === 'g' || unit === 'ml') {
+      totalGrams = safeQty;
+    } else if (unit === 'oz') {
+      totalGrams = safeQty * 28.3495;
+    } else if (unit === 'serving') {
+      totalGrams = safeQty * food.gramsPerServing;
+    } else if (unit === 'cup') {
+      if (refLabel.includes('cup') && food.gramsPerServing > 0) {
+        totalGrams = safeQty * food.gramsPerServing;
+      } else {
+        totalGrams = safeQty * 240;
+      }
+    }
+
+    ratio = baseGrams > 0 ? totalGrams / baseGrams : 0;
   }
-
-  const baseGrams =
-    food.referenceUnit === 'serving'
-      ? food.gramsPerServing * food.referenceQuantity
-      : food.referenceQuantity;
-
-  const ratio = baseGrams > 0 ? totalGrams / baseGrams : 0;
 
   const round1 = (val: number) => Number((Math.round(val * 10) / 10).toFixed(1));
   const roundInt = (val: number) => Math.round(val);

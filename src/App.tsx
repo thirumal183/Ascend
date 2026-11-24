@@ -3,24 +3,28 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
+import { AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { AscendLogo } from './components/brand/AscendLogo';
 import { StartupIntro } from './components/brand/StartupIntro';
 import { AuthModal } from './components/auth/AuthModal';
 import { PathwaySelectionModal } from './components/auth/PathwaySelectionModal';
 import { OnboardingWizardModal } from './components/auth/OnboardingWizardModal';
-import { CalendarView } from './components/calendar/CalendarView';
-import { AiCoachView } from './components/coach/AiCoachView';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { DietManagementView } from './components/diet/DietManagementView';
-import { GoalsProfileView } from './components/goals/GoalsProfileView';
 import { LandingPageView } from './components/landing/LandingPageView';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopHeader } from './components/layout/TopHeader';
-import { ProgressTrackingView } from './components/progress/ProgressTrackingView';
-import { ReportsView } from './components/reports/ReportsView';
-import { SettingsView } from './components/settings/SettingsView';
-import { WorkoutManagementView } from './components/workouts/WorkoutManagementView';
+import type { DailyAdherenceItem } from './services/api/nutritionApi';
+import type { WorkoutSessionResponse } from './services/api/workoutApi';
+
+const CalendarView = lazy(() => import('./components/calendar/CalendarView').then((m) => ({ default: m.CalendarView })));
+const AiCoachView = lazy(() => import('./components/coach/AiCoachView').then((m) => ({ default: m.AiCoachView })));
+const GoalsProfileView = lazy(() => import('./components/goals/GoalsProfileView').then((m) => ({ default: m.GoalsProfileView })));
+const ProgressTrackingView = lazy(() => import('./components/progress/ProgressTrackingView').then((m) => ({ default: m.ProgressTrackingView })));
+const ReportsView = lazy(() => import('./components/reports/ReportsView').then((m) => ({ default: m.ReportsView })));
+const SettingsView = lazy(() => import('./components/settings/SettingsView').then((m) => ({ default: m.SettingsView })));
+const WorkoutManagementView = lazy(() => import('./components/workouts/WorkoutManagementView').then((m) => ({ default: m.WorkoutManagementView })));
 import {
   INITIAL_CHAT_MESSAGES,
   INITIAL_NUTRITION_GOALS,
@@ -36,12 +40,38 @@ import {
   computeRecommendedTargets,
   prototypeSessionStorage,
 } from './services/ascendApiService';
+import {
+  authApi,
+  usersApi,
+  nutritionApi,
+  workoutApi,
+  progressApi,
+  aiCoachApi,
+  onAuthFailure,
+  getStoredAccessToken,
+  getStoredRefreshToken,
+  clearStoredTokens,
+} from './services/api';
+import {
+  mapAuthMeToUserState,
+  mapBackendIntakeRecordToFrontend,
+  mapBackendProgressRecordToFrontend,
+  mapBackendWorkoutPlanToFrontend,
+  mapBackendFoodItemToFrontend,
+  mapBackendChatMessageToFrontend,
+  mapFrontendPathwayToBackend,
+  mapFrontendArchetypeToBackend,
+  mapFrontendGoalTypeToBackend,
+  mapFrontendActivityLevelToBackend,
+  mapFrontendUnitSystemToBackend,
+} from './services/api/mappers';
 import { getLocalDateIso } from './utils/dateUtils';
 import {
   ChatMessage,
   ExerciseItem,
   ExerciseSetLog,
   FitnessGoalType,
+  FoodItem,
   IntakeRecord,
   MealType,
   NavigationTab,
@@ -97,6 +127,7 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(
     savedSession?.chatMessages ?? INITIAL_CHAT_MESSAGES
   );
+  const [foodCatalog, setFoodCatalog] = useState<FoodItem[]>(SAMPLE_FOOD_DATABASE);
 
   const [activeTab, setActiveTab] = useState<NavigationTab>(
     savedSession?.activeTab && Object.values(NavigationTab).includes(savedSession.activeTab)
@@ -116,12 +147,172 @@ export default function App() {
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
   const [pathwayModalOpen, setPathwayModalOpen] = useState(false);
   const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
-  const [pendingAccount, setPendingAccount] = useState<{ name: string; email: string } | null>(null);
+  const [onboardingSubmitting, setOnboardingSubmitting] = useState(false);
+  const [onboardingError, setOnboardingError] = useState<string | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [activeWorkoutSessionId, setActiveWorkoutSessionId] = useState<string | null>(null);
+  const [liveIntakeReport, setLiveIntakeReport] = useState<DailyAdherenceItem[]>([]);
+  const [liveWorkoutSessions, setLiveWorkoutSessions] = useState<WorkoutSessionResponse[]>([]);
+  const [pendingAccount, setPendingAccount] = useState<{
+    name: string;
+    email: string;
+    password?: string;
+  } | null>(null);
   const [selectedOnboardingPathway, setSelectedOnboardingPathway] = useState<OnboardingPathway>(
     savedSession?.userProfile?.pathway || OnboardingPathway.GeneralFitness
   );
 
-  // Persist session changes to localStorage (without any passwords)
+  // Global Toast Notification State
+  const [globalBanner, setGlobalBanner] = useState<{
+    type: 'error' | 'success';
+    message: string;
+  } | null>(null);
+
+  // Auto-dismiss global banner
+  useEffect(() => {
+    if (!globalBanner) return;
+    const t = setTimeout(() => setGlobalBanner(null), 6000);
+    return () => clearTimeout(t);
+  }, [globalBanner]);
+
+  // Session Recovery & Auth Rehydration on Mount
+  useEffect(() => {
+    onAuthFailure(() => {
+      setUserAccount(DEFAULT_UNAUTHENTICATED_ACCOUNT);
+      setShowLandingPage(true);
+      setGlobalBanner({
+        type: 'error',
+        message: 'Your authenticated session expired or was revoked. Please sign in again.',
+      });
+    });
+
+    const hydrateLiveDomainData = async () => {
+      // Clear all demo-only state before hydrating authenticated live data
+      setIntakeRecords([]);
+      setProgressHistory([]);
+      setWorkoutPlans([]);
+      setFoodCatalog([]);
+      setChatMessages([]);
+      setActiveConversationId(null);
+      setActiveWorkoutSessionId(null);
+      setWaterIntakeMl(0);
+      setStepsToday(0);
+
+      const todayIso = getLocalDateIso();
+      const [intakeRes, progRes, plansRes, foodsRes, sessionsRes, convsRes, reportRes] = await Promise.allSettled([
+        nutritionApi.getDailyIntake(todayIso),
+        progressApi.listRecords(365),
+        workoutApi.listPlans(),
+        nutritionApi.searchFoods({ limit: 50 }),
+        workoutApi.listSessions({ days: 30 }),
+        aiCoachApi.listConversations(),
+        nutritionApi.getIntakeReports(30),
+      ]);
+
+      if (reportRes.status === 'fulfilled') {
+        setLiveIntakeReport(reportRes.value.report);
+      } else {
+        setLiveIntakeReport([]);
+      }
+      if (sessionsRes.status === 'fulfilled') {
+        setLiveWorkoutSessions(sessionsRes.value);
+      } else {
+        setLiveWorkoutSessions([]);
+      }
+
+      if (intakeRes.status === 'fulfilled' && intakeRes.value.records) {
+        setIntakeRecords(intakeRes.value.records.map(mapBackendIntakeRecordToFrontend));
+      }
+
+      if (progRes.status === 'fulfilled') {
+        const mappedProg = progRes.value.map(mapBackendProgressRecordToFrontend);
+        setProgressHistory(mappedProg);
+        const todayProg = mappedProg.find((p) => p.dateIso === todayIso);
+        if (todayProg) {
+          setStepsToday(todayProg.stepsCount || 0);
+        }
+      }
+
+      if (plansRes.status === 'fulfilled') {
+        const detailedPlans = await Promise.allSettled(
+          plansRes.value.map((p) => workoutApi.getPlanDetails(p.id))
+        );
+        const hydratedPlans = detailedPlans
+          .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+          .map((r) => mapBackendWorkoutPlanToFrontend(r.value));
+
+        // Overlay today's persisted set logs if a session exists
+        if (sessionsRes.status === 'fulfilled' && sessionsRes.value.length > 0) {
+          const latestSession = sessionsRes.value[0];
+          setActiveWorkoutSessionId(latestSession.id);
+          try {
+            const detail = await workoutApi.getSessionDetails(latestSession.id);
+            for (const plan of hydratedPlans) {
+              if (plan.id === latestSession.workoutPlanId) {
+                plan.exercises = plan.exercises.map((ex) => {
+                  const logs = detail.setLogs.filter((l) => l.exerciseName === ex.name);
+                  if (logs.length === 0) return ex;
+                  return {
+                    ...ex,
+                    completed: logs.every((l) => l.completed),
+                    completedSets: logs.map((l) => ({
+                      setNum: l.setNumber,
+                      targetReps: l.targetReps,
+                      targetLoadKg: l.targetLoadKg,
+                      actualReps: l.actualReps ?? parseInt(l.targetReps, 10) ?? 10,
+                      actualLoadKg: l.actualLoadKg ?? l.targetLoadKg,
+                      completed: l.completed,
+                    })),
+                  };
+                });
+              }
+            }
+          } catch {
+            // Non-fatal if session detail fails
+          }
+        }
+        setWorkoutPlans(hydratedPlans);
+      }
+
+      if (foodsRes.status === 'fulfilled') {
+        setFoodCatalog(foodsRes.value.items.map(mapBackendFoodItemToFrontend));
+      }
+
+      if (convsRes.status === 'fulfilled' && convsRes.value.length > 0) {
+        const latestConv = convsRes.value[0];
+        setActiveConversationId(latestConv.id);
+        try {
+          const convDetail = await aiCoachApi.getConversation(latestConv.id);
+          setChatMessages(convDetail.messages.map(mapBackendChatMessageToFrontend));
+        } catch {
+          // Non-fatal
+        }
+      }
+    };
+
+    const recoverLiveSession = async () => {
+      const token = getStoredAccessToken();
+      if (!token) return;
+
+      try {
+        const me = await authApi.getMe();
+        const mapped = mapAuthMeToUserState(me);
+        setUserAccount(mapped.account);
+        if (mapped.userProfile) setUserProfile(mapped.userProfile);
+        if (mapped.goals) setGoals(mapped.goals);
+        setUsingDemoData(false);
+        setShowLandingPage(false);
+
+        await hydrateLiveDomainData();
+      } catch (err) {
+        clearStoredTokens();
+      }
+    };
+
+    recoverLiveSession();
+  }, []);
+
+  // Persist session changes to localStorage (without passwords)
   useEffect(() => {
     if (userAccount.isAuthenticated && userAccount.onboardingCompleted) {
       prototypeSessionStorage.save({
@@ -137,16 +328,6 @@ export default function App() {
         chatMessages,
         activeTab,
       });
-
-      if (!usingDemoData && userAccount.email) {
-        prototypeSessionStorage.saveRegisteredUser({
-          name: userAccount.name,
-          email: userAccount.email,
-          pathwayConfigured: true,
-          userProfile,
-          goals,
-        });
-      }
     }
   }, [
     userAccount,
@@ -183,7 +364,6 @@ export default function App() {
       );
       setWaterIntakeMl(1750);
     } else {
-      // Fresh personal log for new users
       setIntakeRecords([]);
       setProgressHistory([
         {
@@ -209,6 +389,7 @@ export default function App() {
 
   // Direct Demo entry from Landing Page
   const handleDirectDemoEntry = () => {
+    clearStoredTokens();
     handleCompleteAuthAndOnboarding({
       account: {
         name: 'Alex Rivera',
@@ -225,8 +406,17 @@ export default function App() {
     setShowLandingPage(false);
   };
 
-  // Sign Out / Switch Profile
-  const handleSignOut = () => {
+  // Sign Out / Revoke Session
+  const handleSignOut = async () => {
+    const rt = getStoredRefreshToken();
+    if (rt) {
+      try {
+        await authApi.logout(rt);
+      } catch {
+        // Continue clean local sign out
+      }
+    }
+    clearStoredTokens();
     prototypeSessionStorage.clear();
     setUserAccount(DEFAULT_UNAUTHENTICATED_ACCOUNT);
     setShowLandingPage(true);
@@ -246,33 +436,144 @@ export default function App() {
   };
 
   // Handle successful Sign In
-  const handleSignInSuccess = (account: {
+  const handleSignInSuccess = async (account: {
     name: string;
     email: string;
     rememberMe: boolean;
+    userProfile?: UserProfile;
+    goals?: NutritionGoals;
   }) => {
-    const registered = prototypeSessionStorage.findRegisteredUser(account.email);
+    const isDemo =
+      account.email.toLowerCase().includes('demo') ||
+      account.email === 'alex.rivera@ascend.app';
+
     const authedAccount: UserAccount = {
-      name: account.name || registered?.name || account.email.split('@')[0],
+      name: account.name,
       email: account.email,
       isAuthenticated: true,
       onboardingCompleted: true,
       rememberMe: account.rememberMe,
-      isDemoAccount: false,
+      isDemoAccount: isDemo,
     };
     setUserAccount(authedAccount);
-    if (registered?.userProfile && registered?.goals) {
-      setUserProfile(registered.userProfile);
-      setGoals(registered.goals);
+    setUsingDemoData(isDemo);
+
+    if (account.userProfile) setUserProfile(account.userProfile);
+    if (account.goals) setGoals(account.goals);
+
+    if (!isDemo) {
+      setIntakeRecords([]);
+      setProgressHistory([]);
+      setWorkoutPlans([]);
+      setFoodCatalog([]);
+      setChatMessages([]);
+      setActiveConversationId(null);
+      setActiveWorkoutSessionId(null);
+      setWaterIntakeMl(0);
+      setStepsToday(0);
+
+      const todayIso = getLocalDateIso();
+      try {
+        const [intakeRes, progRes, plansRes, foodsRes, sessionsRes, convsRes, reportRes] = await Promise.allSettled([
+          nutritionApi.getDailyIntake(todayIso),
+          progressApi.listRecords(365),
+          workoutApi.listPlans(),
+          nutritionApi.searchFoods({ limit: 50 }),
+          workoutApi.listSessions({ days: 30 }),
+          aiCoachApi.listConversations(),
+          nutritionApi.getIntakeReports(30),
+        ]);
+
+        if (reportRes.status === 'fulfilled') {
+          setLiveIntakeReport(reportRes.value.report);
+        } else {
+          setLiveIntakeReport([]);
+        }
+        if (sessionsRes.status === 'fulfilled') {
+          setLiveWorkoutSessions(sessionsRes.value);
+        } else {
+          setLiveWorkoutSessions([]);
+        }
+
+        if (intakeRes.status === 'fulfilled' && intakeRes.value.records) {
+          setIntakeRecords(intakeRes.value.records.map(mapBackendIntakeRecordToFrontend));
+        }
+        if (progRes.status === 'fulfilled') {
+          const mappedProg = progRes.value.map(mapBackendProgressRecordToFrontend);
+          setProgressHistory(mappedProg);
+          const todayProg = mappedProg.find((p) => p.dateIso === todayIso);
+          if (todayProg) {
+            setStepsToday(todayProg.stepsCount || 0);
+          }
+        }
+        if (plansRes.status === 'fulfilled') {
+          const detailedPlans = await Promise.allSettled(
+            plansRes.value.map((p) => workoutApi.getPlanDetails(p.id))
+          );
+          const hydratedPlans = detailedPlans
+            .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+            .map((r) => mapBackendWorkoutPlanToFrontend(r.value));
+
+          if (sessionsRes.status === 'fulfilled' && sessionsRes.value.length > 0) {
+            const latestSession = sessionsRes.value[0];
+            setActiveWorkoutSessionId(latestSession.id);
+            try {
+              const detail = await workoutApi.getSessionDetails(latestSession.id);
+              for (const plan of hydratedPlans) {
+                if (plan.id === latestSession.workoutPlanId) {
+                  plan.exercises = plan.exercises.map((ex) => {
+                    const logs = detail.setLogs.filter((l) => l.exerciseName === ex.name);
+                    if (logs.length === 0) return ex;
+                    return {
+                      ...ex,
+                      completed: logs.every((l) => l.completed),
+                      completedSets: logs.map((l) => ({
+                        setNum: l.setNumber,
+                        targetReps: l.targetReps,
+                        targetLoadKg: l.targetLoadKg,
+                        actualReps: l.actualReps ?? parseInt(l.targetReps, 10) ?? 10,
+                        actualLoadKg: l.actualLoadKg ?? l.targetLoadKg,
+                        completed: l.completed,
+                      })),
+                    };
+                  });
+                }
+              }
+            } catch {
+              // Non-fatal
+            }
+          }
+          setWorkoutPlans(hydratedPlans);
+        }
+        if (foodsRes.status === 'fulfilled') {
+          setFoodCatalog(foodsRes.value.items.map(mapBackendFoodItemToFrontend));
+        }
+        if (convsRes.status === 'fulfilled' && convsRes.value.length > 0) {
+          const latestConv = convsRes.value[0];
+          setActiveConversationId(latestConv.id);
+          try {
+            const convDetail = await aiCoachApi.getConversation(latestConv.id);
+            setChatMessages(convDetail.messages.map(mapBackendChatMessageToFrontend));
+          } catch {
+            // Non-fatal
+          }
+        }
+      } catch (err) {
+        console.warn('Error loading user data after login:', err);
+      }
     }
-    setUsingDemoData(false);
+
     setAuthModalOpen(false);
     setShowLandingPage(false);
     setActiveTab(NavigationTab.Dashboard);
   };
 
   // Handle successful Sign Up -> Transition to Pathway Selection
-  const handleSignUpSuccess = (account: { name: string; email: string }) => {
+  const handleSignUpSuccess = (account: {
+    name: string;
+    email: string;
+    password?: string;
+  }) => {
     setPendingAccount(account);
     setAuthModalOpen(false);
     setPathwayModalOpen(true);
@@ -284,11 +585,128 @@ export default function App() {
     setOnboardingModalOpen(true);
   };
 
-  // Handle Onboarding completed -> Launch Dashboard
-  const handleOnboardingCompleted = (
+  // Handle Onboarding completed -> Live Backend Registration or Launch Dashboard
+  const handleOnboardingCompleted = async (
     profile: UserProfile,
     newGoals: NutritionGoals
   ) => {
+    if (pendingAccount?.password) {
+      setOnboardingSubmitting(true);
+      setOnboardingError(null);
+      try {
+        const regRes = await authApi.register({
+          email: pendingAccount.email,
+          password: pendingAccount.password,
+          fullName: pendingAccount.name,
+          pathway: mapFrontendPathwayToBackend(profile.pathway),
+          archetype: mapFrontendArchetypeToBackend(profile.archetype),
+          goalType: mapFrontendGoalTypeToBackend(profile.goalType),
+          biologicalSex: profile.biologicalSex || 'unspecified',
+          currentWeightKg: profile.currentWeightKg,
+          targetWeightKg: profile.targetWeightKg,
+          heightCm: profile.heightCm,
+          age: profile.age,
+          activityLevel: mapFrontendActivityLevelToBackend(profile.activityLevel),
+          unitSystem: mapFrontendUnitSystemToBackend(profile.unitSystem),
+          trainingDaysPerWeek: profile.trainingDaysPerWeek,
+        });
+
+        // Persist any custom Step 3 macro/calorie edits made during onboarding
+        let persistedGoals = newGoals;
+        try {
+          const updatedGoals = await usersApi.updateGoals({
+            dailyCalories: newGoals.dailyCalories,
+            proteinG: newGoals.proteinG,
+            carbsG: newGoals.carbsG,
+            fatG: newGoals.fatG,
+            waterMl: newGoals.waterMl,
+            dailySteps: newGoals.dailySteps,
+            weeklyWorkoutSessions: newGoals.weeklyWorkoutSessions,
+            weeklyActivityMinutes: newGoals.weeklyActivityMinutes,
+          });
+          persistedGoals = {
+            ...newGoals,
+            dailyCalories: updatedGoals.dailyCalories,
+            proteinG: updatedGoals.proteinG,
+            carbsG: updatedGoals.carbsG,
+            fatG: updatedGoals.fatG,
+            waterMl: updatedGoals.waterMl,
+          };
+        } catch {
+          // Non-fatal: backend defaults remain active
+        }
+
+        const authedAccount: UserAccount = {
+          name: regRes.user.fullName,
+          email: regRes.user.email,
+          isAuthenticated: true,
+          onboardingCompleted: true,
+          rememberMe: true,
+          isDemoAccount: false,
+        };
+
+        setUserAccount(authedAccount);
+        setUserProfile(profile);
+        setGoals(persistedGoals);
+        setUsingDemoData(false);
+        setIntakeRecords([]);
+        setProgressHistory([]);
+        setChatMessages([]);
+        setActiveConversationId(null);
+        setWaterIntakeMl(0);
+        setStepsToday(0);
+
+        // Load live food catalog and workout templates for the newly registered user
+        try {
+          const [foodsRes, plansRes] = await Promise.allSettled([
+            nutritionApi.searchFoods({ limit: 50 }),
+            workoutApi.listPlans(),
+          ]);
+          if (foodsRes.status === 'fulfilled') {
+            setFoodCatalog(foodsRes.value.items.map(mapBackendFoodItemToFrontend));
+          } else {
+            setFoodCatalog([]);
+          }
+          if (plansRes.status === 'fulfilled') {
+            const detailed = await Promise.allSettled(
+              plansRes.value.map((p) => workoutApi.getPlanDetails(p.id))
+            );
+            setWorkoutPlans(
+              detailed
+                .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+                .map((r) => mapBackendWorkoutPlanToFrontend(r.value))
+            );
+          } else {
+            setWorkoutPlans([]);
+          }
+        } catch {
+          setFoodCatalog([]);
+          setWorkoutPlans([]);
+        }
+
+        setPendingAccount(null);
+        setOnboardingModalOpen(false);
+        setShowLandingPage(false);
+        setActiveTab(NavigationTab.Dashboard);
+        setGlobalBanner({
+          type: 'success',
+          message: `Welcome to ASCEND, ${regRes.user.fullName}! Account and ${profile.pathway} goals registered successfully.`,
+        });
+        return;
+      } catch (err: any) {
+        const msg = `Registration failed: ${err.message || 'Please check your inputs and try again.'}`;
+        setOnboardingError(msg);
+        setGlobalBanner({
+          type: 'error',
+          message: msg,
+        });
+        return;
+      } finally {
+        setOnboardingSubmitting(false);
+      }
+    }
+
+    // Fallback Demo or prototype flow
     const finalAccount: UserAccount = {
       name: pendingAccount?.name || userAccount.name || 'Friend',
       email: pendingAccount?.email || userAccount.email || 'user@ascend.app',
@@ -317,26 +735,69 @@ export default function App() {
 
   // Diet Management Handlers
   const handleAddIntakeRecord = (record: Omit<IntakeRecord, 'id'>): string => {
+    const tempId = `intake-${Date.now()}`;
     const newRecord: IntakeRecord = {
       ...record,
-      id: `intake-${Date.now()}`,
+      id: tempId,
     };
     setIntakeRecords((prev) => [...prev, newRecord]);
-    return newRecord.id;
+
+    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
+      nutritionApi
+        .logIntake({
+          foodId: record.foodId,
+          meal: record.meal as any,
+          quantity: record.quantity,
+          unit: record.unit as any,
+          dateIso: record.dateIso || getLocalDateIso(),
+        })
+        .then((created) => {
+          const mapped = mapBackendIntakeRecordToFrontend(created);
+          setIntakeRecords((prev) =>
+            prev.map((r) => (r.id === tempId ? mapped : r))
+          );
+        })
+        .catch((err: any) => {
+          setIntakeRecords((prev) => prev.filter((r) => r.id !== tempId));
+          setGlobalBanner({
+            type: 'error',
+            message: `Failed to save meal to server: ${err.message}`,
+          });
+        });
+    }
+
+    return tempId;
   };
 
-  const handleUpdateIntakeRecord = (
+  const handleUpdateIntakeRecord = async (
     id: string,
     quantity: number,
     unit: ServingUnit,
     meal: MealType
   ) => {
+    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
+      try {
+        const updated = await nutritionApi.updateIntake(id, {
+          quantity,
+          unit,
+          meal,
+        });
+        const mapped = mapBackendIntakeRecordToFrontend(updated);
+        setIntakeRecords((prev) => prev.map((r) => (r.id === id ? mapped : r)));
+        return;
+      } catch (err: any) {
+        setGlobalBanner({
+          type: 'error',
+          message: `Failed to update meal on backend: ${err.message}`,
+        });
+        return;
+      }
+    }
+
     setIntakeRecords((prev) =>
       prev.map((rec) => {
         if (rec.id !== id) return rec;
-        const catalogFood = SAMPLE_FOOD_DATABASE.find(
-          (f) => f.id === rec.foodId
-        );
+        const catalogFood = foodCatalog.find((f) => f.id === rec.foodId);
         const computedNutrients = catalogFood
           ? calculateScaledNutrients(catalogFood, quantity, unit)
           : rec.computedNutrients;
@@ -352,8 +813,70 @@ export default function App() {
     );
   };
 
-  const handleDeleteIntakeRecord = (id: string) => {
+  const handleDeleteIntakeRecord = async (id: string) => {
+    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
+      try {
+        await nutritionApi.deleteIntake(id);
+      } catch (err: any) {
+        setGlobalBanner({
+          type: 'error',
+          message: `Failed to delete meal from backend: ${err.message}`,
+        });
+        return;
+      }
+    }
     setIntakeRecords((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  // Custom Food Creation & Deletion Handlers
+  const handleAddCustomFood = async (food: FoodItem): Promise<FoodItem | void> => {
+    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
+      try {
+        const created = await nutritionApi.createCustomFood({
+          name: food.name,
+          category: food.category,
+          brandOrSource: food.brandOrSource,
+          referenceQuantity: food.referenceQuantity,
+          referenceUnit: food.referenceUnit,
+          referenceLabel: food.referenceLabel,
+          gramsPerServing: food.gramsPerServing,
+          ediblePortionPct: food.ediblePortionPct || 100,
+          nutrients: food.nutrients,
+          dataNote: food.dataNote,
+        });
+        const mapped = mapBackendFoodItemToFrontend(created);
+        setFoodCatalog((prev) => [mapped, ...prev]);
+        setGlobalBanner({
+          type: 'success',
+          message: `Created custom food "${mapped.name}" in database.`,
+        });
+        return mapped;
+      } catch (err: any) {
+        setGlobalBanner({
+          type: 'error',
+          message: `Failed to create custom food on backend: ${err.message}`,
+        });
+        throw err;
+      }
+    }
+
+    setFoodCatalog((prev) => [food, ...prev]);
+    return food;
+  };
+
+  const handleDeleteCustomFood = async (foodId: string) => {
+    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
+      try {
+        await nutritionApi.deleteCustomFood(foodId);
+      } catch (err: any) {
+        setGlobalBanner({
+          type: 'error',
+          message: `Failed to delete custom food: ${err.message}`,
+        });
+        return;
+      }
+    }
+    setFoodCatalog((prev) => prev.filter((f) => f.id !== foodId));
   };
 
   // Water Handler
@@ -361,12 +884,65 @@ export default function App() {
     setWaterIntakeMl((prev) => Math.max(0, prev + deltaMl));
   };
 
+  // Workout Persistence Helper for Live Mode
+  const persistWorkoutPlanState = async (plan: WorkoutPlan) => {
+    if (usingDemoData || !userAccount.isAuthenticated || userAccount.isDemoAccount) return;
+    try {
+      let sessionId = activeWorkoutSessionId;
+      const todayIso = getLocalDateIso();
+      if (!sessionId) {
+        const created = await workoutApi.createSession({
+          workoutPlanId: plan.id,
+          sessionTitle: plan.title,
+          dateLogged: todayIso,
+          durationMinutes: plan.estimatedMinutes,
+          caloriesBurned: plan.targetCaloriesBurned,
+          completed: plan.exercises.length > 0 && plan.exercises.every((e) => e.completed),
+        });
+        sessionId = created.id;
+        setActiveWorkoutSessionId(sessionId);
+      }
+
+      const setPayloads = plan.exercises.flatMap((ex) => {
+        const sets = ex.completedSets && ex.completedSets.length > 0
+          ? ex.completedSets
+          : Array.from({ length: Math.max(1, ex.sets) }, (_, i) => ({
+              setNum: i + 1,
+              targetReps: ex.reps,
+              targetLoadKg: ex.loadKg,
+              actualReps: parseInt(ex.reps, 10) || 10,
+              actualLoadKg: ex.loadKg,
+              completed: ex.completed,
+            }));
+        return sets.map((s) => ({
+          exerciseName: ex.name,
+          setNumber: s.setNum,
+          targetReps: s.targetReps,
+          targetLoadKg: s.targetLoadKg,
+          actualReps: s.actualReps,
+          actualLoadKg: s.actualLoadKg,
+          completed: s.completed,
+        }));
+      });
+
+      if (setPayloads.length > 0) {
+        await workoutApi.updateSetLogs(sessionId, setPayloads);
+      }
+    } catch (err: any) {
+      setGlobalBanner({
+        type: 'error',
+        message: `Failed to sync workout telemetry: ${err.message}`,
+      });
+    }
+  };
+
   // Workout Handlers
   const handleToggleExercise = (workoutId: string, exerciseId: string) => {
+    let updatedPlan: WorkoutPlan | undefined;
     setWorkoutPlans((prev) =>
       prev.map((plan) => {
         if (plan.id !== workoutId) return plan;
-        return {
+        const nextPlan: WorkoutPlan = {
           ...plan,
           exercises: plan.exercises.map((ex) => {
             if (ex.id !== exerciseId) return ex;
@@ -381,20 +957,26 @@ export default function App() {
             };
           }),
         };
+        updatedPlan = nextPlan;
+        return nextPlan;
       })
     );
+    if (updatedPlan) {
+      void persistWorkoutPlanState(updatedPlan);
+    }
   };
 
-  const handleUpdateExerciseSets = (
+  const handleUpdateExerciseSets = async (
     workoutId: string,
     exerciseId: string,
     sets: ExerciseSetLog[]
   ) => {
     const allCompleted = sets.length > 0 && sets.every((s) => s.completed);
+    let updatedPlan: WorkoutPlan | undefined;
     setWorkoutPlans((prev) =>
       prev.map((plan) => {
         if (plan.id !== workoutId) return plan;
-        return {
+        const nextPlan: WorkoutPlan = {
           ...plan,
           exercises: plan.exercises.map((ex) =>
             ex.id === exerciseId
@@ -402,8 +984,13 @@ export default function App() {
               : ex
           ),
         };
+        updatedPlan = nextPlan;
+        return nextPlan;
       })
     );
+    if (updatedPlan) {
+      await persistWorkoutPlanState(updatedPlan);
+    }
   };
 
   const handleAddExercise = (
@@ -424,16 +1011,54 @@ export default function App() {
   };
 
   // Goals & Profile Handler
-  const handleUpdateProfileAndGoals = (
+  const handleUpdateProfileAndGoals = async (
     nextProfile: UserProfile,
     nextGoals: NutritionGoals
   ) => {
     setUserProfile(nextProfile);
     setGoals(nextGoals);
+
+    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
+      try {
+        await usersApi.updateProfile({
+          pathway: mapFrontendPathwayToBackend(nextProfile.pathway),
+          archetype: mapFrontendArchetypeToBackend(nextProfile.archetype),
+          goalType: mapFrontendGoalTypeToBackend(nextProfile.goalType),
+          biologicalSex: nextProfile.biologicalSex || 'unspecified',
+          unitSystem: mapFrontendUnitSystemToBackend(nextProfile.unitSystem),
+          currentWeightKg: nextProfile.currentWeightKg,
+          targetWeightKg: nextProfile.targetWeightKg,
+          heightCm: nextProfile.heightCm,
+          age: nextProfile.age,
+          activityLevel: mapFrontendActivityLevelToBackend(nextProfile.activityLevel),
+          trainingDaysPerWeek: nextProfile.trainingDaysPerWeek,
+          recalculateGoals: false,
+        });
+        await usersApi.updateGoals({
+          dailyCalories: nextGoals.dailyCalories,
+          proteinG: nextGoals.proteinG,
+          carbsG: nextGoals.carbsG,
+          fatG: nextGoals.fatG,
+          waterMl: nextGoals.waterMl,
+          dailySteps: nextGoals.dailySteps,
+          weeklyWorkoutSessions: nextGoals.weeklyWorkoutSessions,
+          weeklyActivityMinutes: nextGoals.weeklyActivityMinutes,
+        });
+        setGlobalBanner({
+          type: 'success',
+          message: 'Profile and nutrition targets saved to database.',
+        });
+      } catch (err: any) {
+        setGlobalBanner({
+          type: 'error',
+          message: `Failed to save profile/goals: ${err.message}`,
+        });
+      }
+    }
   };
 
   // Switch Pathway in Settings without losing historical records
-  const handleChangePathway = (pathway: OnboardingPathway) => {
+  const handleChangePathway = async (pathway: OnboardingPathway) => {
     const defaultGoalMap: Record<OnboardingPathway, FitnessGoalType> = {
       [OnboardingPathway.GeneralFitness]: FitnessGoalType.WeightLoss,
       [OnboardingPathway.AthletePerformance]: FitnessGoalType.AthleticPerformance,
@@ -450,10 +1075,84 @@ export default function App() {
     };
     setUserProfile(nextProfile);
     setGoals(computeRecommendedTargets(nextProfile));
+
+    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
+      try {
+        const res = await usersApi.switchPathway({
+          pathway: mapFrontendPathwayToBackend(pathway),
+          archetype: mapFrontendArchetypeToBackend(nextProfile.archetype),
+          goalType: mapFrontendGoalTypeToBackend(nextProfile.goalType),
+          recalculateGoals: true,
+        });
+        setGoals({
+          dailyCalories: res.nutritionGoals.dailyCalories,
+          proteinG: res.nutritionGoals.proteinG,
+          carbsG: res.nutritionGoals.carbsG,
+          fatG: res.nutritionGoals.fatG,
+          waterMl: res.nutritionGoals.waterMl,
+          dailySteps: res.nutritionGoals.dailySteps,
+          weeklyWorkoutSessions: res.nutritionGoals.weeklyWorkoutSessions,
+          weeklyActivityMinutes: res.nutritionGoals.weeklyActivityMinutes,
+        });
+        setGlobalBanner({
+          type: 'success',
+          message: `Switched pathway to ${pathway} and recalculated targets.`,
+        });
+      } catch (err: any) {
+        setGlobalBanner({
+          type: 'error',
+          message: `Failed to switch pathway: ${err.message}`,
+        });
+      }
+    }
   };
 
   // Progress Checkpoint Handler
-  const handleAddProgressRecord = (record: Omit<ProgressRecord, 'id'>) => {
+  const handleAddProgressRecord = async (record: Omit<ProgressRecord, 'id'>) => {
+    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
+      try {
+        const created = await progressApi.createOrUpsertRecord({
+          dateLogged: record.dateIso,
+          label: record.label,
+          weightKg: record.weightKg,
+          bodyFatPct: record.bodyFatPct,
+          leanMassKg: record.leanMassKg,
+          waistCm: record.waistCm,
+          chestCm: record.chestCm,
+          armCm: record.armCm,
+          thighCm: record.thighCm,
+          caloriesConsumed: record.caloriesConsumed,
+          proteinConsumedG: record.proteinConsumedG,
+          carbsConsumedG: record.carbsConsumedG,
+          fatConsumedG: record.fatConsumedG,
+          workoutCompleted: record.workoutCompleted,
+          activityMinutes: record.activityMinutes,
+          stepsCount: record.stepsCount,
+        });
+
+        const mapped = mapBackendProgressRecordToFrontend(created);
+        setProgressHistory((prev) => {
+          const filtered = prev.filter((p) => p.dateIso !== mapped.dateIso);
+          return [...filtered, mapped];
+        });
+        setUserProfile((prev) => ({
+          ...prev,
+          currentWeightKg: record.weightKg,
+        }));
+        setGlobalBanner({
+          type: 'success',
+          message: `Saved biometric check-in for ${mapped.dateIso} (${mapped.weightKg} kg) to backend.`,
+        });
+        return;
+      } catch (err: any) {
+        setGlobalBanner({
+          type: 'error',
+          message: `Failed to save progress to server: ${err.message}`,
+        });
+        throw err;
+      }
+    }
+
     const newRec: ProgressRecord = {
       ...record,
       id: `prog-${Date.now()}`,
@@ -482,14 +1181,43 @@ export default function App() {
     }
   };
 
-  // AI Coach Message Handler
+  // AI Coach Message Handlers
   const handleAppendMessage = (msg: ChatMessage) => {
     setChatMessages((prev) => [...prev, msg]);
   };
 
+  const handleClearMessages = async () => {
+    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount && activeConversationId) {
+      try {
+        await aiCoachApi.deleteConversation(activeConversationId);
+      } catch (err: any) {
+        setGlobalBanner({
+          type: 'error',
+          message: `Failed to delete conversation history: ${err.message}`,
+        });
+        return;
+      }
+    }
+    setActiveConversationId(null);
+    setChatMessages([]);
+  };
+
   // Settings Handlers
-  const handleChangeUnitSystem = (unitSystem: UnitSystem) => {
+  const handleChangeUnitSystem = async (unitSystem: UnitSystem) => {
     setUserProfile((prev) => ({ ...prev, unitSystem }));
+    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
+      try {
+        await usersApi.updateProfile({
+          unitSystem: mapFrontendUnitSystemToBackend(unitSystem),
+          recalculateGoals: false,
+        });
+      } catch (err: any) {
+        setGlobalBanner({
+          type: 'error',
+          message: `Failed to save unit preference: ${err.message}`,
+        });
+      }
+    }
   };
 
   const handleResetSampleData = () => {
@@ -542,10 +1270,13 @@ export default function App() {
           isOpen={onboardingModalOpen}
           pathway={selectedOnboardingPathway}
           onBackToPathway={() => {
+            setOnboardingError(null);
             setOnboardingModalOpen(false);
             setPathwayModalOpen(true);
           }}
           onComplete={handleOnboardingCompleted}
+          isSubmitting={onboardingSubmitting}
+          submitError={onboardingError}
         />
       </>
     );
@@ -558,12 +1289,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex bg-slate-50/80 text-slate-900 selection:bg-sky-500/20 selection:text-sky-950">
-      {/* Modern Scandinavian Health-Tech Sidebar */}
+      {/* Desktop Navigation Sidebar */}
       <Sidebar
         activeTab={activeTab}
-        onSelectTab={(tab) => handleNavigate(tab)}
-        userProfile={userProfile}
         userAccount={userAccount}
+        userProfile={userProfile}
+        onSelectTab={(tab) => handleNavigate(tab)}
         onSignOut={handleSignOut}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
@@ -571,7 +1302,6 @@ export default function App() {
         onSwitchPathway={() => setPathwayModalOpen(true)}
       />
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <TopHeader
           activeTab={activeTab}
@@ -583,8 +1313,45 @@ export default function App() {
           onSwitchPathway={() => setPathwayModalOpen(true)}
         />
 
+        {/* Global Toast Notification */}
+        {globalBanner && (
+          <div className="px-4 sm:px-6 lg:px-8 pt-4">
+            <div
+              className={`max-w-6xl mx-auto p-4 rounded-2xl flex items-center justify-between gap-3 shadow-md animate-fade-in ${
+                globalBanner.type === 'error'
+                  ? 'bg-rose-50 border border-rose-200 text-rose-900'
+                  : 'bg-emerald-50 border border-emerald-200 text-emerald-900'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                {globalBanner.type === 'error' ? (
+                  <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                )}
+                <span className="text-sm font-medium">{globalBanner.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGlobalBanner(null)}
+                className="p-1 rounded-lg hover:bg-black/5 text-slate-500 hover:text-slate-800"
+                aria-label="Dismiss message"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="max-w-6xl mx-auto">
+            <Suspense
+              fallback={
+                <div className="py-16 text-center text-sm text-slate-500 animate-pulse">
+                  Loading view...
+                </div>
+              }
+            >
             {activeTab === NavigationTab.Dashboard && (
               <DashboardView
                 userAccount={userAccount}
@@ -603,13 +1370,15 @@ export default function App() {
 
             {activeTab === NavigationTab.Diet && (
               <DietManagementView
-                foodCatalog={SAMPLE_FOOD_DATABASE}
+                foodCatalog={foodCatalog}
                 intakeRecords={intakeRecords}
                 goals={goals}
                 initialMeal={preselectedMeal}
                 onAddIntakeRecord={handleAddIntakeRecord}
                 onUpdateIntakeRecord={handleUpdateIntakeRecord}
                 onDeleteIntakeRecord={handleDeleteIntakeRecord}
+                onAddCustomFood={handleAddCustomFood}
+                onDeleteCustomFood={handleDeleteCustomFood}
               />
             )}
 
@@ -647,6 +1416,8 @@ export default function App() {
                 goals={goals}
                 userProfile={userProfile}
                 progressHistory={progressHistory}
+                intakeReport={usingDemoData ? [] : liveIntakeReport}
+                workoutSessions={usingDemoData ? [] : liveWorkoutSessions}
               />
             )}
 
@@ -654,11 +1425,15 @@ export default function App() {
               <AiCoachView
                 messages={chatMessages}
                 onAppendMessage={handleAppendMessage}
+                onClearMessages={handleClearMessages}
+                conversationId={activeConversationId}
+                onConversationIdChange={setActiveConversationId}
                 intakeRecords={intakeRecords}
                 goals={goals}
                 userProfile={userProfile}
                 progressHistory={progressHistory}
                 onNavigate={(tab) => handleNavigate(tab)}
+                isDemoAccount={userAccount.isDemoAccount ?? false}
               />
             )}
 
@@ -667,6 +1442,8 @@ export default function App() {
                 intakeRecords={intakeRecords}
                 goals={goals}
                 onNavigate={(tab) => handleNavigate(tab)}
+                intakeReport={usingDemoData ? [] : liveIntakeReport}
+                workoutSessions={usingDemoData ? [] : liveWorkoutSessions}
               />
             )}
 
@@ -682,11 +1459,12 @@ export default function App() {
                 onSignOut={handleSignOut}
               />
             )}
+            </Suspense>
           </div>
         </main>
       </div>
 
-      {/* Pathway Switcher Modal (Accessible from anywhere in the app) */}
+      {/* Pathway Switcher Modal */}
       <PathwaySelectionModal
         isOpen={pathwayModalOpen}
         selectedPathway={userProfile.pathway}

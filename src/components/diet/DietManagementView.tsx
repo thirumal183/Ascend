@@ -50,6 +50,7 @@ import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { ProgressBar } from '../ui/ProgressBar';
 import { EmptyState } from '../ui/EmptyState';
+import { Modal } from '../ui/Modal';
 
 interface DietManagementViewProps {
   foodCatalog: FoodItem[];
@@ -64,6 +65,8 @@ interface DietManagementViewProps {
     meal: MealType
   ) => void;
   onDeleteIntakeRecord: (id: string) => void;
+  onAddCustomFood?: (food: FoodItem) => Promise<FoodItem | void> | FoodItem | void;
+  onDeleteCustomFood?: (foodId: string) => Promise<void> | void;
 }
 
 const FOOD_CATEGORIES: FoodCategory[] = [
@@ -94,10 +97,25 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
   onAddIntakeRecord,
   onUpdateIntakeRecord,
   onDeleteIntakeRecord,
+  onAddCustomFood,
+  onDeleteCustomFood,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FoodCategory>('All');
-  const [selectedFood, setSelectedFood] = useState<FoodItem>(foodCatalog[0]);
+  const [selectedFood, setSelectedFood] = useState<FoodItem>(foodCatalog[0] || {
+    id: 'food-default',
+    name: 'Standard Food Item',
+    brandOrSource: 'ASCEND Database',
+    category: 'Protein Sources',
+    preparationState: 'cooked',
+    referenceQuantity: 100,
+    referenceUnit: 'g',
+    referenceLabel: '100g',
+    gramsPerServing: 100,
+    ediblePortionPct: 100,
+    nutrients: { calories: 150, proteinG: 20, carbsG: 5, fatG: 3, fiberG: null, sugarG: null, sodiumMg: null },
+    isMicronutrientComplete: true,
+  });
 
   const [quantity, setQuantity] = useState<number>(150);
   const [unit, setUnit] = useState<ServingUnit>('g');
@@ -105,6 +123,19 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
     initialMeal || MealType.Breakfast
   );
   const [showExtendedDetails, setShowExtendedDetails] = useState(false);
+
+  // Custom Food Creator Modal State
+  const [isCustomFoodModalOpen, setIsCustomFoodModalOpen] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customCategory, setCustomCategory] = useState<Exclude<FoodCategory, 'All'>>('Protein Sources');
+  const [customBrand, setCustomBrand] = useState('Custom Food');
+  const [customCalories, setCustomCalories] = useState<number>(150);
+  const [customProtein, setCustomProtein] = useState<number>(20);
+  const [customCarbs, setCustomCarbs] = useState<number>(10);
+  const [customFat, setCustomFat] = useState<number>(5);
+  const [customServingGrams, setCustomServingGrams] = useState<number>(100);
+  const [customFoodError, setCustomFoodError] = useState<string | null>(null);
+  const [isSavingCustomFood, setIsSavingCustomFood] = useState(false);
 
   // Confirmation banner with Undo support
   const [addedFeedback, setAddedFeedback] = useState<{
@@ -155,6 +186,67 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
       }
       return [...prev, foodId];
     });
+  };
+
+  const handleCreateCustomFoodSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCustomFoodError(null);
+    if (!customName.trim()) {
+      setCustomFoodError('Please enter a food name.');
+      return;
+    }
+    if (customServingGrams <= 0) {
+      setCustomFoodError('Serving size in grams must be greater than 0.');
+      return;
+    }
+
+    const newFood: FoodItem = {
+      id: `custom-food-${Date.now()}`,
+      name: customName.trim(),
+      brandOrSource: customBrand.trim() || 'Custom User Food',
+      category: customCategory,
+      preparationState: 'cooked',
+      referenceQuantity: customServingGrams,
+      referenceUnit: 'g',
+      referenceLabel: `${customServingGrams}g`,
+      gramsPerServing: customServingGrams,
+      ediblePortionPct: 100,
+      nutrients: {
+        calories: Math.max(0, customCalories),
+        proteinG: Math.max(0, customProtein),
+        carbsG: Math.max(0, customCarbs),
+        fatG: Math.max(0, customFat),
+        fiberG: null,
+        sugarG: null,
+        sodiumMg: null,
+      },
+      isMicronutrientComplete: true,
+      dataNote: 'Custom user food item.',
+    };
+
+    setIsSavingCustomFood(true);
+    try {
+      if (onAddCustomFood) {
+        const returned = await onAddCustomFood(newFood);
+        if (returned) {
+          setSelectedFood(returned);
+        } else {
+          setSelectedFood(newFood);
+        }
+      } else {
+        setSelectedFood(newFood);
+      }
+      setIsCustomFoodModalOpen(false);
+      setCustomName('');
+      setAddedFeedback({
+        message: `Created and selected custom food "${newFood.name}"`,
+        recordId: newFood.id,
+      });
+    } catch (err: any) {
+      setCustomFoodError(err?.message || 'Failed to save custom food.');
+    } finally {
+      setIsSavingCustomFood(false);
+    }
   };
 
   useEffect(() => {
@@ -548,6 +640,14 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
 
           {/* Category Filter Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1" role="group" aria-label="Filter food by category">
+            <button
+              type="button"
+              onClick={() => setIsCustomFoodModalOpen(true)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-sky-50 border border-sky-300 text-sky-800 hover:bg-sky-100 transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1 shadow-2xs"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>+ Custom Food</span>
+            </button>
             {FOOD_CATEGORIES.map((cat) => (
               <button
                 key={cat}
@@ -597,12 +697,9 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
               <EmptyState
                 icon={Utensils}
                 title="No matching foods found"
-                description="Try another search term or clear the category filter."
-                actionLabel="Show All Foods"
-                onAction={() => {
-                  setSearchQuery('');
-                  setSelectedCategory('All');
-                }}
+                description="Try another search term or create a custom food item."
+                actionLabel="Create Custom Food"
+                onAction={() => setIsCustomFoodModalOpen(true)}
               />
             ) : (
               <div className="divide-y divide-slate-100">
@@ -1154,6 +1251,170 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
         onRemoveFood={(id) => handleToggleCompare(id)}
         onAddFoodToCompare={(id) => handleToggleCompare(id)}
       />
+
+      {/* Custom Food Creator Modal */}
+      <Modal
+        isOpen={isCustomFoodModalOpen}
+        onClose={() => setIsCustomFoodModalOpen(false)}
+        title="Create Custom Food Item"
+        subtitle="Saved foods are private to your account and mapped into the normalized 3NF nutrient catalog."
+        maxWidth="lg"
+      >
+        <form onSubmit={handleCreateCustomFoodSubmit} className="space-y-4">
+          {customFoodError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{customFoodError}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="sm:col-span-2">
+              <label htmlFor="custom-food-name" className="block text-xs font-semibold text-slate-700 mb-1">
+                Food Name *
+              </label>
+              <input
+                id="custom-food-name"
+                type="text"
+                required
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="e.g., Homemade Protein Smoothie"
+                className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="custom-food-category" className="block text-xs font-semibold text-slate-700 mb-1">
+                Category
+              </label>
+              <select
+                id="custom-food-category"
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value as any)}
+                className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
+              >
+                {FOOD_CATEGORIES.filter((c) => c !== 'All').map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="custom-food-brand" className="block text-xs font-semibold text-slate-700 mb-1">
+                Brand / Source
+              </label>
+              <input
+                id="custom-food-brand"
+                type="text"
+                value={customBrand}
+                onChange={(e) => setCustomBrand(e.target.value)}
+                placeholder="e.g., Home Recipe / Brand"
+                className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="custom-serving-grams" className="block text-xs font-semibold text-slate-700 mb-1">
+                Serving Size (grams) *
+              </label>
+              <input
+                id="custom-serving-grams"
+                type="number"
+                min="1"
+                required
+                value={customServingGrams}
+                onChange={(e) => setCustomServingGrams(Math.max(1, parseInt(e.target.value, 10) || 100))}
+                className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="custom-calories" className="block text-xs font-semibold text-slate-700 mb-1">
+                Calories (kcal) *
+              </label>
+              <input
+                id="custom-calories"
+                type="number"
+                min="0"
+                required
+                value={customCalories}
+                onChange={(e) => setCustomCalories(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="custom-protein" className="block text-xs font-semibold text-slate-700 mb-1">
+                Protein (g) *
+              </label>
+              <input
+                id="custom-protein"
+                type="number"
+                step="0.1"
+                min="0"
+                required
+                value={customProtein}
+                onChange={(e) => setCustomProtein(Math.max(0, parseFloat(e.target.value) || 0))}
+                className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="custom-carbs" className="block text-xs font-semibold text-slate-700 mb-1">
+                Carbs (g) *
+              </label>
+              <input
+                id="custom-carbs"
+                type="number"
+                step="0.1"
+                min="0"
+                required
+                value={customCarbs}
+                onChange={(e) => setCustomCarbs(Math.max(0, parseFloat(e.target.value) || 0))}
+                className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="custom-fat" className="block text-xs font-semibold text-slate-700 mb-1">
+                Fat (g) *
+              </label>
+              <input
+                id="custom-fat"
+                type="number"
+                step="0.1"
+                min="0"
+                required
+                value={customFat}
+                onChange={(e) => setCustomFat(Math.max(0, parseFloat(e.target.value) || 0))}
+                className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500"
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCustomFoodModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={isSavingCustomFood}
+            >
+              {isSavingCustomFood ? 'Saving Food...' : 'Save & Select Food'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

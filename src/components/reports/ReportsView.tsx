@@ -12,11 +12,16 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 
+import type { DailyAdherenceItem } from '../../services/api/nutritionApi';
+import type { WorkoutSessionResponse } from '../../services/api/workoutApi';
+
 interface ReportsViewProps {
   intakeRecords: IntakeRecord[];
   goals: NutritionGoals;
   userProfile: UserProfile;
   progressHistory: ProgressRecord[];
+  intakeReport?: DailyAdherenceItem[];
+  workoutSessions?: WorkoutSessionResponse[];
 }
 
 export const ReportsView: React.FC<ReportsViewProps> = ({
@@ -24,6 +29,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   goals,
   userProfile,
   progressHistory,
+  intakeReport = [],
+  workoutSessions = [],
 }) => {
   const todayIso = getLocalDateIso();
   const yesterdayIso = getDateWithOffset(-1).dateIso;
@@ -38,11 +45,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     [todayIntakeRecords]
   );
 
-  // Compute 7-day rolling adherence matrix from actual intake records
+  // Compute 7-day rolling adherence matrix from real intake records, backend adherence report, progress & workout sessions
   const past7Days = useMemo(() => {
     const dates = getPastNDaysIso(7);
     return dates.map((dateIso) => {
       const records = intakeRecords.filter((r) => r.dateIso === dateIso);
+      const reportRow = intakeReport.find((r) => r.dateIso === dateIso);
+      const progRow = progressHistory.find((p) => p.dateIso === dateIso);
+      const daySessions = workoutSessions.filter((s) => s.dateLogged === dateIso);
       const isToday = dateIso === todayIso;
       const isYesterday = dateIso === yesterdayIso;
       const dateObj = new Date(`${dateIso}T00:00:00`);
@@ -53,37 +63,31 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         ? 'Yesterday'
         : `${weekday} (${dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
 
-      if (records.length === 0) {
-        return {
-          dateIso,
-          dayLabel,
-          isToday,
-          hasLogs: false,
-          calories: 0,
-          protein: 0,
-          delta: -goals.dailyCalories,
-          activityMins: 0,
-          steps: 0,
-          workoutDone: false,
-        };
-      }
+      const totals = records.length > 0 ? computeDailyTotals(records) : null;
+      const calories = totals ? totals.calories : (reportRow?.calories ?? progRow?.caloriesConsumed ?? 0);
+      const protein = totals ? Math.round(totals.proteinG) : Math.round(reportRow?.proteinG ?? progRow?.proteinConsumedG ?? 0);
+      const hasLogs = records.length > 0 || (reportRow ? reportRow.calories > 0 : false) || (progRow ? progRow.caloriesConsumed > 0 : false);
+      const delta = calories - goals.dailyCalories;
 
-      const totals = computeDailyTotals(records);
-      const delta = totals.calories - goals.dailyCalories;
+      const sessionMins = daySessions.reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+      const activityMins = sessionMins > 0 ? sessionMins : (progRow?.activityMinutes ?? 0);
+      const steps = progRow?.stepsCount ?? 0;
+      const workoutDone = daySessions.some((s) => s.completed) || Boolean(progRow?.workoutCompleted);
+
       return {
         dateIso,
         dayLabel,
         isToday,
-        hasLogs: true,
-        calories: totals.calories,
-        protein: Math.round(totals.proteinG),
+        hasLogs,
+        calories,
+        protein,
         delta,
-        activityMins: isToday ? 48 : 50,
-        steps: isToday ? 8450 : 9200,
-        workoutDone: true,
+        activityMins,
+        steps,
+        workoutDone,
       };
     });
-  }, [intakeRecords, goals.dailyCalories, todayIso, yesterdayIso]);
+  }, [intakeRecords, intakeReport, progressHistory, workoutSessions, goals.dailyCalories, todayIso, yesterdayIso]);
 
   const handleDownloadCsv = () => {
     if (intakeRecords.length === 0) return;
@@ -101,11 +105,16 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       'Fat_g',
       'Data_Source',
     ];
+    const sanitizeCsvCell = (val: string) => {
+      const safe = /^[=+\-@\t\r]/.test(val) ? `'${val}` : val;
+      return `"${safe.replace(/"/g, '""')}"`;
+    };
+
     const rows = intakeRecords.map((r) => [
       r.dateIso || new Date().toISOString().split('T')[0],
       r.meal,
       r.loggedAt,
-      `"${r.foodName.replace(/"/g, '""')}"`,
+      sanitizeCsvCell(r.foodName),
       r.quantity,
       r.unit,
       r.computedNutrients.calories,
@@ -115,18 +124,17 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       r.isUserLogged ? 'User_Logged_Session' : 'Sample_Baseline',
     ]);
 
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     const dateStr = new Date().toISOString().split('T')[0];
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', url);
     link.setAttribute('download', `ascend_nutrition_report_${dateStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (

@@ -51,7 +51,7 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
     workoutPlans[0];
 
   const [selectedPlanId, setSelectedPlanId] = useState<string>(
-    matchingDefault.id
+    matchingDefault?.id || ''
   );
   const [expandedExerciseId, setExpandedExerciseId] = useState<string | null>(
     null
@@ -71,9 +71,9 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
   const [exRest, setExRest] = useState(90);
 
   useEffect(() => {
-    const matched = workoutPlans.find(
-      (p) => p.recommendedPathway === userPathway
-    );
+    const matched =
+      workoutPlans.find((p) => p.recommendedPathway === userPathway) ||
+      workoutPlans[0];
     if (matched) {
       setSelectedPlanId(matched.id);
     }
@@ -81,6 +81,22 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
 
   const activePlan =
     workoutPlans.find((p) => p.id === selectedPlanId) || workoutPlans[0];
+
+  if (!activePlan) {
+    return (
+      <div className="max-w-4xl mx-auto py-12 animate-page-enter">
+        <Card className="p-8 text-center">
+          <Dumbbell className="h-10 w-10 text-slate-400 mx-auto mb-3" />
+          <h2 className="font-display text-lg font-bold text-slate-900">
+            No Workout Plans Available
+          </h2>
+          <p className="text-sm text-slate-600 mt-1">
+            Create or load a workout routine to start tracking exercises and sets.
+          </p>
+        </Card>
+      </div>
+    );
+  }
 
   const completedCount = activePlan.exercises.filter((e) => e.completed).length;
   const totalCount = activePlan.exercises.length;

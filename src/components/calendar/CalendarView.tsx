@@ -6,10 +6,15 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 
+import type { DailyAdherenceItem } from '../../services/api/nutritionApi';
+import type { WorkoutSessionResponse } from '../../services/api/workoutApi';
+
 interface CalendarViewProps {
   intakeRecords: IntakeRecord[];
   goals: NutritionGoals;
   onNavigate: (tab: NavigationTab) => void;
+  intakeReport?: DailyAdherenceItem[];
+  workoutSessions?: WorkoutSessionResponse[];
 }
 
 interface CalendarDayEntry {
@@ -26,6 +31,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   intakeRecords,
   goals,
   onNavigate,
+  intakeReport = [],
+  workoutSessions = [],
 }) => {
   // Dynamic Month and Day Calculations
   const now = useMemo(() => new Date(), []);
@@ -34,6 +41,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const currentMonthName = now.toLocaleDateString('en-US', { month: 'long' });
   const todayDateNum = now.getDate();
   const daysInMonth = new Date(currentYear, currentMonthIdx + 1, 0).getDate();
+  // Monday-first leading empty offset cells (0 = Mon ... 6 = Sun)
+  const leadingEmptyDays = (new Date(currentYear, currentMonthIdx, 1).getDay() + 6) % 7;
 
   // Map real intake records by local ISO date string (YYYY-MM-DD)
   const recordsByDate = useMemo(() => {
@@ -56,16 +65,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         const dayRecords = recordsByDate.get(dateIso) || [];
         const hasRecords = dayRecords.length > 0;
         const dayTotals = hasRecords ? computeDailyTotals(dayRecords) : null;
+        const reportRow = intakeReport.find((r) => r.dateIso === dateIso);
+        const daySessions = workoutSessions.filter((s) => s.dateLogged === dateIso);
+        const realWorkoutLabel = daySessions.length > 0 ? daySessions[0].sessionTitle : undefined;
+
+        const cal = dayTotals ? dayTotals.calories : (reportRow?.calories ?? 0);
+        const pro = dayTotals ? Math.round(dayTotals.proteinG) : Math.round(reportRow?.proteinG ?? 0);
 
         if (day === todayDateNum) {
-          const cal = dayTotals ? dayTotals.calories : 0;
-          const pro = dayTotals ? Math.round(dayTotals.proteinG) : 0;
           return {
             dayNumber: day,
             dateIso,
             calories: cal,
             proteinG: pro,
-            workoutLabel: 'Today’s Planned Session',
+            workoutLabel: realWorkoutLabel || 'Today’s Planned Session',
             adherenceStatus: cal > 0 ? (Math.abs(cal - goals.dailyCalories) <= 250 ? 'optimal' : 'moderate') : 'unlogged',
             isToday: true,
           };
@@ -76,23 +89,19 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             dateIso,
             calories: 0,
             proteinG: 0,
-            workoutLabel:
-              day % 2 === 0 ? 'Scheduled Resistance Session' : undefined,
+            workoutLabel: realWorkoutLabel,
             adherenceStatus: 'upcoming',
           };
         }
 
-        // Past days: derive strictly from logged intake records
-        if (hasRecords && dayTotals) {
-          const cal = dayTotals.calories;
-          const pro = Math.round(dayTotals.proteinG);
+        if (cal > 0) {
           const adherence = Math.abs(cal - goals.dailyCalories) <= 250 ? 'optimal' : 'moderate';
           return {
             dayNumber: day,
             dateIso,
             calories: cal,
             proteinG: pro,
-            workoutLabel: day % 2 !== 0 ? 'Logged Resistance Session' : undefined,
+            workoutLabel: realWorkoutLabel,
             adherenceStatus: adherence,
           };
         }
@@ -103,11 +112,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           dateIso,
           calories: 0,
           proteinG: 0,
-          workoutLabel: undefined,
+          workoutLabel: realWorkoutLabel,
           adherenceStatus: 'unlogged',
         };
       }),
-    [recordsByDate, daysInMonth, currentYear, currentMonthIdx, todayDateNum, goals.dailyCalories]
+    [recordsByDate, daysInMonth, currentYear, currentMonthIdx, intakeReport, workoutSessions, todayDateNum, goals.dailyCalories]
   );
 
   const [selectedDayNumber, setSelectedDayNumber] = useState<number>(todayDateNum);
@@ -174,6 +183,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </div>
 
           <div className="grid grid-cols-7 gap-2">
+            {Array.from({ length: leadingEmptyDays }).map((_, idx) => (
+              <div key={`empty-${idx}`} aria-hidden="true" className="min-h-[82px] rounded-xl bg-slate-50/30" />
+            ))}
             {monthDays.map((entry) => {
               const isSelected = selectedDay.dayNumber === entry.dayNumber;
               return (

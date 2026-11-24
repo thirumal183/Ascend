@@ -30,6 +30,8 @@ export interface OnboardingWizardModalProps {
   pathway: OnboardingPathway;
   onBackToPathway: () => void;
   onComplete: (profile: UserProfile, goals: NutritionGoals) => void;
+  isSubmitting?: boolean;
+  submitError?: string | null;
 }
 
 export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
@@ -37,6 +39,8 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
   pathway,
   onBackToPathway,
   onComplete,
+  isSubmitting = false,
+  submitError = null,
 }) => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +75,33 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
         ? FitnessGoalType.AthleticPerformance
         : FitnessGoalType.WeightLoss
   );
+
+  // Sync pathway-dependent defaults whenever pathway or modal open state changes
+  useEffect(() => {
+    if (!isOpen) return;
+    setStep(1);
+    setError(null);
+    setTargetWeightValue(
+      pathway === OnboardingPathway.MuscleGain
+        ? '78.0'
+        : pathway === OnboardingPathway.AthletePerformance
+          ? '74.0'
+          : '71.0'
+    );
+    setActivityLevel(
+      pathway === OnboardingPathway.AthletePerformance
+        ? ActivityLevel.VeryActive
+        : ActivityLevel.ModeratelyActive
+    );
+    setTrainingDays(pathway === OnboardingPathway.AthletePerformance ? 5 : 4);
+    setGoalType(
+      pathway === OnboardingPathway.MuscleGain
+        ? FitnessGoalType.MuscleGain
+        : pathway === OnboardingPathway.AthletePerformance
+          ? FitnessGoalType.AthleticPerformance
+          : FitnessGoalType.WeightLoss
+    );
+  }, [isOpen, pathway]);
 
   // Unit conversion helpers
   const handleUnitSystemChange = (newSystem: UnitSystem) => {
@@ -285,10 +316,10 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
 
         {/* Form Body */}
         <div className="p-6 overflow-y-auto space-y-4">
-          {error && (
+          {(error || submitError) && (
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2 animate-fade-in">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{error}</span>
+              <span>{error || submitError}</span>
             </div>
           )}
 
@@ -655,10 +686,12 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({
               pathway={pathway}
               size="md"
               onClick={handleFinish}
+              disabled={isSubmitting}
+              isLoading={isSubmitting}
               rightIcon={<CheckCircle2 className="h-4 w-4" />}
               className="font-bold px-6"
             >
-              Launch ASCEND Dashboard
+              {isSubmitting ? 'Creating Account...' : 'Launch ASCEND Dashboard'}
             </Button>
           )}
         </div>

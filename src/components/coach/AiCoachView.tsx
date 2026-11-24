@@ -3,16 +3,25 @@ import {
   AlertCircle,
   ArrowRight,
   Bot,
+  Info,
   Loader2,
+  Lock,
+  RotateCcw,
   Send,
+  ShieldAlert,
+  ShieldCheck,
   Sparkles,
+  Trash2,
   User,
+  Zap,
 } from 'lucide-react';
 import {
   PATHWAY_SUGGESTED_PROMPTS,
   SUGGESTED_COACH_PROMPTS,
 } from '../../data/mockData';
 import { generateMockCoachReply } from '../../services/ascendApiService';
+import { aiCoachApi, ApiError } from '../../services/api';
+import { mapBackendChatMessageToFrontend } from '../../services/api/mappers';
 import {
   ChatMessage,
   IntakeRecord,
@@ -28,26 +37,35 @@ import { Badge } from '../ui/Badge';
 interface AiCoachViewProps {
   messages: ChatMessage[];
   onAppendMessage: (msg: ChatMessage) => void;
+  onClearMessages?: () => void;
+  conversationId?: string | null;
+  onConversationIdChange?: (id: string | null) => void;
   intakeRecords: IntakeRecord[];
   goals: NutritionGoals;
   userProfile: UserProfile;
   progressHistory: ProgressRecord[];
   onNavigate: (tab: NavigationTab) => void;
+  isDemoAccount?: boolean;
 }
 
 export const AiCoachView: React.FC<AiCoachViewProps> = ({
   messages,
   onAppendMessage,
+  onClearMessages,
+  conversationId = null,
+  onConversationIdChange,
   intakeRecords,
   goals,
   userProfile,
   progressHistory,
   onNavigate,
+  isDemoAccount = false,
 }) => {
   const [inputPrompt, setInputPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [simulateError, setSimulateError] = useState(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [showPrivacyNotice, setShowPrivacyNotice] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -58,7 +76,7 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
   const pathwayPrompts =
     PATHWAY_SUGGESTED_PROMPTS[userProfile.pathway] || SUGGESTED_COACH_PROMPTS;
 
-  const handleSendMessage = (promptText: string) => {
+  const handleSendMessage = async (promptText: string) => {
     const trimmed = promptText.trim();
     if (!trimmed || isGenerating) return;
 
@@ -76,35 +94,63 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
     setInputPrompt('');
     setIsGenerating(true);
 
-    setTimeout(() => {
-      if (simulateError) {
+    if (simulateError) {
+      setTimeout(() => {
         setIsGenerating(false);
         setErrorBanner(
           'Unable to reach the coaching service right now (simulated error state). Please try again.'
         );
-        return;
+      }, 300);
+      return;
+    }
+
+    if (isDemoAccount) {
+      // In Demo Mode: execute local rule heuristics
+      setTimeout(() => {
+        const generated = generateMockCoachReply(
+          trimmed,
+          intakeRecords,
+          goals,
+          userProfile,
+          progressHistory
+        );
+
+        const assistantMsg: ChatMessage = {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          timestamp: 'Just now · Demo Rule Heuristics',
+          content: generated.content,
+          structuredInsight: generated.structuredInsight,
+          isMockResponse: true,
+        };
+
+        onAppendMessage(assistantMsg);
+        setIsGenerating(false);
+      }, 400);
+      return;
+    }
+
+    // Live Backend Mode: dispatch to FastAPI POST /api/v1/ai/chat
+    try {
+      const response = await aiCoachApi.sendChatMessage({
+        conversationId: conversationId || undefined,
+        message: trimmed,
+      });
+
+      if (response.conversationId && onConversationIdChange) {
+        onConversationIdChange(response.conversationId);
       }
 
-      const generated = generateMockCoachReply(
-        trimmed,
-        intakeRecords,
-        goals,
-        userProfile,
-        progressHistory
-      );
-
-      const assistantMsg: ChatMessage = {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        timestamp: 'Just now · Demonstration response',
-        content: generated.content,
-        structuredInsight: generated.structuredInsight,
-        isMockResponse: true,
-      };
-
+      const assistantMsg = mapBackendChatMessageToFrontend(response);
       onAppendMessage(assistantMsg);
+    } catch (err: any) {
+      const msg = err instanceof ApiError ? err.message : err?.message || 'Coaching service unreachable.';
+      setErrorBanner(
+        `Backend AI request failed: ${msg}. You can retry or verify your connection to the ASCEND backend.`
+      );
+    } finally {
       setIsGenerating(false);
-    }, 360);
+    }
   };
 
   const handleFormSubmit = (e: React.FormEvent) => {
@@ -126,29 +172,66 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setSimulateError(!simulateError)}
-          className={`px-3 py-1.5 text-xs font-medium rounded-xl border transition-colors self-start sm:self-auto ${
-            simulateError
-              ? 'bg-red-50 border-red-300 text-red-800'
-              : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          {simulateError ? 'Error State: Active' : 'Test Error State'}
-        </button>
-      </div>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {onClearMessages && messages.length > 0 && (
+            <button
+              type="button"
+              onClick={onClearMessages}
+              className="px-3 py-1.5 text-xs font-medium rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-rose-600 hover:border-rose-200 transition-colors inline-flex items-center gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Clear History</span>
+            </button>
+          )}
 
-      {/* Main Chat Container */}
-      {/* Simulation / Gemini API Service Boundary Badge */}
-      <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 flex items-start gap-3 shadow-2xs">
-        <Sparkles className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
-        <div className="text-xs text-slate-600 leading-relaxed">
-          <strong className="text-slate-900 font-semibold">Simulated AI Assistant (Rule Heuristics):</strong>{' '}
-          In this client-side prototype, coaching responses are generated via deterministic nutrition rule heuristics grounded in your active diary logs. The backend handoff architecture establishes the API boundary for production Gemini 1.5 Flash / Pro integration via FastAPI (<code className="font-mono text-slate-800 bg-slate-100 px-1 py-0.5 rounded">POST /api/v1/ai/chat</code>).
+          <button
+            type="button"
+            onClick={() => setSimulateError(!simulateError)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-xl border transition-colors ${
+              simulateError
+                ? 'bg-rose-50 border-rose-300 text-rose-800'
+                : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            {simulateError ? 'Test Error: Active' : 'Test Error State'}
+          </button>
         </div>
       </div>
 
+      {/* Batch 6.1 External AI Privacy & Non-Medical Boundary Banner */}
+      {showPrivacyNotice && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-sky-50 to-indigo-50/60 border border-sky-200/80 text-xs text-slate-700 space-y-2 shadow-2xs relative">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold text-sky-950">
+              <ShieldCheck className="h-4 w-4 text-sky-600" />
+              <span>AI Data Privacy & Model Disclosure (Batch 6.1 Audit Passed)</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPrivacyNotice(false)}
+              className="text-slate-400 hover:text-slate-600 font-semibold text-[11px]"
+            >
+              Dismiss
+            </button>
+          </div>
+          <p className="leading-relaxed text-slate-600">
+            Coaching insights are synthesized by <strong className="text-slate-900">Google Gemini 2.5 Flash</strong> (<code className="font-mono text-slate-800 bg-white/80 px-1 py-0.5 rounded">gemini-2.5-flash</code>) or deterministic local rule heuristics when offline. Transmitted context includes only your active pathway, nutritional goals, logged day totals, and recent workout summaries.
+          </p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-[11px] text-slate-500">
+            <span className="inline-flex items-center gap-1">
+              <Lock className="h-3 w-3 text-emerald-600" /> Zero credentials, emails, or names transmitted
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <ShieldAlert className="h-3 w-3 text-amber-600" /> Educational only — non-medical boundary
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Zap className="h-3 w-3 text-sky-600" /> Server-side API key containment
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Main Chat Container */}
       <Card
         variant="elevated"
         className="flex flex-col h-[620px] p-0 overflow-hidden"
@@ -160,11 +243,22 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
               <Sparkles className="h-4 w-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                ASCEND Nutrition Coach
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900">
+                  ASCEND Performance Coach
+                </h2>
+                {isDemoAccount ? (
+                  <Badge variant="amber" size="sm">
+                    Demo Heuristics
+                  </Badge>
+                ) : (
+                  <Badge variant="emerald" size="sm">
+                    Live Gemini Connected
+                  </Badge>
+                )}
+              </div>
               <p className="text-xs text-slate-500">
-                Demonstration responses · {userProfile.pathway} ({goals.dailyCalories.toLocaleString()} kcal target)
+                Grounding: {userProfile.pathway} ({goals.dailyCalories.toLocaleString()} kcal target)
               </p>
             </div>
           </div>
@@ -220,6 +314,7 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
                 >
                   <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
 
+                  {/* Structured Insight Card */}
                   {msg.structuredInsight && (
                     <div className="mt-3 bg-slate-50 rounded-xl border border-slate-200/80 p-4 space-y-3 text-slate-800">
                       <div className="flex items-center justify-between">
@@ -230,7 +325,7 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
                           </h3>
                         </div>
                         <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                          Demonstration Insight
+                          Structured Guidance
                         </span>
                       </div>
 
@@ -264,7 +359,7 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
                             onClick={() =>
                               onNavigate(
                                 msg.structuredInsight!.suggestedAction!
-                                   .targetTab
+                                  .targetTab as NavigationTab
                               )
                             }
                             className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-800 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-lg border border-sky-200/60 transition-colors"
@@ -279,8 +374,26 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
                     </div>
                   )}
 
-                  <div className={`text-[11px] ${isUser ? 'text-sky-100' : 'text-slate-500'}`}>
-                    {msg.timestamp}
+                  {/* Model Lineage Badge and Timestamp */}
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                    {!isUser && (
+                      <div className="flex items-center gap-1.5">
+                        {msg.isMockResponse ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/70">
+                            <Zap className="h-3 w-3 text-amber-600" />
+                            Pathway Heuristic Fallback
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-emerald-50 text-emerald-800 border border-emerald-200/70">
+                            <Sparkles className="h-3 w-3 text-emerald-600" />
+                            Gemini 2.5 Flash
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <div className={`text-[11px] ${isUser ? 'text-sky-100 ml-auto' : 'text-slate-500'}`}>
+                      {msg.timestamp}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -290,14 +403,14 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
           {isGenerating && (
             <div className="flex items-center gap-2.5 text-xs text-slate-500 p-3 rounded-xl bg-slate-50 border border-slate-200/70 w-fit animate-fade-in">
               <Loader2 className="h-4 w-4 text-sky-600 animate-spin" />
-              <span>Reviewing your logged nutrition...</span>
+              <span>Synthesizing coaching advice with Gemini 2.5 Flash...</span>
             </div>
           )}
 
           {errorBanner && (
-            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs flex items-center justify-between gap-3 animate-fade-in">
+            <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs flex items-center justify-between gap-3 animate-fade-in">
               <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+                <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
                 <span>{errorBanner}</span>
               </div>
               <button
@@ -306,7 +419,7 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
                   setSimulateError(false);
                   setErrorBanner(null);
                 }}
-                className="font-semibold underline whitespace-nowrap"
+                className="font-semibold underline whitespace-nowrap text-rose-700 hover:text-rose-900"
               >
                 Dismiss
               </button>
@@ -349,6 +462,11 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
               <span>Send</span>
             </button>
           </form>
+
+          {/* Persistent Non-Medical Disclaimer */}
+          <p className="text-[10px] text-center text-slate-400">
+            Educational coaching only · Not intended as clinical nutrition or medical therapy.
+          </p>
         </div>
       </Card>
     </div>

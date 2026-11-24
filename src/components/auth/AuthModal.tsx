@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  Loader2,
   Lock,
   Mail,
   Sparkles,
@@ -13,6 +14,9 @@ import {
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { prototypeSessionStorage } from '../../services/ascendApiService';
+import { authApi, ApiError } from '../../services/api';
+import { mapAuthMeToUserState } from '../../services/api/mappers';
+import { UserProfile, NutritionGoals } from '../../types/ascend';
 
 export interface AuthModalProps {
   isOpen: boolean;
@@ -22,10 +26,13 @@ export interface AuthModalProps {
     name: string;
     email: string;
     rememberMe: boolean;
+    userProfile?: UserProfile;
+    goals?: NutritionGoals;
   }) => void;
   onSignUpSuccess: (account: {
     name: string;
     email: string;
+    password?: string;
   }) => void;
   onExploreDemo: () => void;
 }
@@ -47,6 +54,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [rememberMe, setRememberMe] = useState(true);
   const [signInError, setSignInError] = useState<string | null>(null);
   const [showForgotNotice, setShowForgotNotice] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sign Up state
   const [signUpName, setSignUpName] = useState('');
@@ -60,6 +68,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setActiveTab(initialTab);
     setSignInError(null);
     setSignUpError(null);
+    setIsSubmitting(false);
   }, [initialTab, isOpen]);
 
   useEffect(() => {
@@ -73,7 +82,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSignInSubmit = (e: React.FormEvent) => {
+  const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignInError(null);
 
@@ -83,19 +92,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Check prototype registry
-    const registered = prototypeSessionStorage.findRegisteredUser(email);
-    if (registered) {
-      onSignInSuccess({
-        name: registered.name || 'Member',
-        email: registered.email,
-        rememberMe,
-      });
-      return;
-    }
-
-    // If demo account entered
-    if (email.toLowerCase().includes('demo') || email.toLowerCase().includes('alex')) {
+    // Demo account shortcut
+    if (email.toLowerCase().includes('demo') || email.toLowerCase() === 'alex.rivera@ascend.app') {
       onSignInSuccess({
         name: 'Alex Rivera (Demo)',
         email: 'alex.rivera@ascend.app',
@@ -104,15 +102,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Allow graceful standard prototype sign in for testing
-    const derivedName = email.split('@')[0].replace(/[._]/g, ' ');
-    const formattedName =
-      derivedName.charAt(0).toUpperCase() + derivedName.slice(1);
-    onSignInSuccess({
-      name: formattedName || 'Member',
-      email,
-      rememberMe,
-    });
+    setIsSubmitting(true);
+    try {
+      // Authenticate with live FastAPI backend
+      await authApi.login({
+        username: email,
+        password: signInPassword,
+      });
+
+      // Retrieve full composite account and profile
+      const me = await authApi.getMe();
+      const mapped = mapAuthMeToUserState(me);
+
+      onSignInSuccess({
+        name: mapped.account.name,
+        email: mapped.account.email,
+        rememberMe,
+        userProfile: mapped.userProfile,
+        goals: mapped.goals,
+      });
+    } catch (err: any) {
+      if (err instanceof ApiError) {
+        setSignInError(err.message);
+      } else {
+        setSignInError(err?.message || 'Authentication failed. Please verify your credentials.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSignUpSubmit = (e: React.FormEvent) => {
@@ -130,8 +147,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setSignUpError('Please enter a valid email address.');
       return;
     }
-    if (signUpPassword.length < 6) {
-      setSignUpError('Password must be at least 6 characters long.');
+    if (signUpPassword.length < 8) {
+      setSignUpError('Password must be at least 8 characters long for backend security.');
       return;
     }
     if (signUpPassword !== signUpConfirm) {
@@ -142,6 +159,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     onSignUpSuccess({
       name,
       email,
+      password: signUpPassword,
     });
   };
 
@@ -300,8 +318,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </label>
               </div>
 
-              <Button type="submit" variant="primary" className="w-full py-2.5">
-                Sign In to ASCEND
+              <Button type="submit" variant="primary" className="w-full py-2.5" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Signing in...</span>
+                  </span>
+                ) : (
+                  'Sign In to ASCEND'
+                )}
               </Button>
             </form>
           ) : (
@@ -349,7 +374,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type={showSignUpPass ? 'text' : 'password'}
                     value={signUpPassword}
                     onChange={(e) => setSignUpPassword(e.target.value)}
-                    placeholder="Min. 6 characters"
+                    placeholder="Min. 8 characters"
                     className="w-full pl-10 pr-10 py-2.5 text-xs sm:text-sm bg-slate-50 border border-slate-200/90 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white transition-colors"
                     required
                   />

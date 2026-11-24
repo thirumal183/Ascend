@@ -234,7 +234,7 @@ export interface CoachStructuredInsight {
     label: string;
     current: string;
     target: string;
-    status: 'optimal' | 'attention' | 'deficit';
+    status: 'optimal' | 'attention' | 'deficit' | 'warning';
   }[];
   suggestedAction?: {
     label: string;

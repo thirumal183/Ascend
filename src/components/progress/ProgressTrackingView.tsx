@@ -86,11 +86,15 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
 
   const handleLogSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const w = parseFloat(weightInput) || userProfile.currentWeightKg;
-    const bf = parseFloat(bodyFatInput) || 14.0;
-    const waist = parseFloat(waistInput) || 79.5;
-    const chest = parseFloat(chestInput) || 102.5;
-    const leanMass = Math.round(w * (1 - bf / 100) * 10) / 10;
+    const rawWeight = parseFloat(weightInput);
+    const w = !isNaN(rawWeight) && rawWeight > 0 ? rawWeight : userProfile.currentWeightKg;
+    const rawBf = parseFloat(bodyFatInput);
+    const bf = !isNaN(rawBf) ? rawBf : undefined;
+    const rawWaist = parseFloat(waistInput);
+    const waist = !isNaN(rawWaist) ? rawWaist : undefined;
+    const rawChest = parseFloat(chestInput);
+    const chest = !isNaN(rawChest) ? rawChest : undefined;
+    const leanMass = bf !== undefined ? Math.round(w * (1 - bf / 100) * 10) / 10 : undefined;
 
     const todayDateIso = getLocalDateIso();
     const todayLabel = `Logged (${new Date().toLocaleDateString('en-US', {
@@ -106,8 +110,8 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
       leanMassKg: leanMass,
       waistCm: waist,
       chestCm: chest,
-      armCm: 38.2,
-      thighCm: 58.5,
+      armCm: undefined,
+      thighCm: undefined,
       caloriesConsumed: goals.dailyCalories,
       proteinConsumedG: goals.proteinG,
       carbsConsumedG: goals.carbsG,
