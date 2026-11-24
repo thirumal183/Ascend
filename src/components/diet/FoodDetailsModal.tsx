@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AlertCircle,
   BookOpen,
@@ -25,6 +25,15 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
   onSelectForLog,
 }) => {
   const [basis, setBasis] = useState<'serving' | '100g'>('100g');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen || !food) return null;
 
@@ -57,7 +66,7 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
       return (
         <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60">
           <AlertCircle className="h-3 w-3 shrink-0" />
-          Not reported
+          — (Unmeasured)
         </span>
       );
     }
@@ -105,7 +114,8 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="food-details-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in overscroll-contain"
     >
       <div
         className="w-full max-w-2xl bg-white border border-slate-200/90 rounded-3xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden animate-scale-in"
@@ -160,11 +170,12 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
         </div>
 
         {/* Scrollable Body */}
-        <div className="p-6 space-y-6 overflow-y-auto">
+        <div className="p-6 space-y-6 overflow-y-auto overscroll-contain">
           {/* Basis Toggle: Per 100g vs Per Serving */}
-          <div className="flex items-center justify-between p-1.5 bg-slate-100 rounded-2xl">
+          <div role="group" aria-label="Nutrient reference basis" className="flex items-center justify-between p-1.5 bg-slate-100 rounded-2xl">
             <button
               type="button"
+              aria-pressed={basis === '100g'}
               onClick={() => setBasis('100g')}
               className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                 basis === '100g'
@@ -177,6 +188,7 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
             </button>
             <button
               type="button"
+              aria-pressed={basis === 'serving'}
               onClick={() => setBasis('serving')}
               className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
                 basis === 'serving'

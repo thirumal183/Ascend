@@ -4,7 +4,11 @@
  */
 
 import { useEffect, useState } from 'react';
-import { AuthOnboardingFlow } from './components/auth/AuthOnboardingFlow';
+import { AscendLogo } from './components/brand/AscendLogo';
+import { StartupIntro } from './components/brand/StartupIntro';
+import { AuthModal } from './components/auth/AuthModal';
+import { PathwaySelectionModal } from './components/auth/PathwaySelectionModal';
+import { OnboardingWizardModal } from './components/auth/OnboardingWizardModal';
 import { CalendarView } from './components/calendar/CalendarView';
 import { AiCoachView } from './components/coach/AiCoachView';
 import { DashboardView } from './components/dashboard/DashboardView';
@@ -32,9 +36,11 @@ import {
   computeRecommendedTargets,
   prototypeSessionStorage,
 } from './services/ascendApiService';
+import { getLocalDateIso } from './utils/dateUtils';
 import {
   ChatMessage,
   ExerciseItem,
+  ExerciseSetLog,
   FitnessGoalType,
   IntakeRecord,
   MealType,
@@ -93,7 +99,9 @@ export default function App() {
   );
 
   const [activeTab, setActiveTab] = useState<NavigationTab>(
-    NavigationTab.Dashboard
+    savedSession?.activeTab && Object.values(NavigationTab).includes(savedSession.activeTab)
+      ? savedSession.activeTab
+      : NavigationTab.Dashboard
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [preselectedMeal, setPreselectedMeal] = useState<MealType | undefined>(
@@ -103,9 +111,15 @@ export default function App() {
   const [showLandingPage, setShowLandingPage] = useState<boolean>(
     !savedSession?.account?.isAuthenticated
   );
-  const [authInitialScreen, setAuthInitialScreen] = useState<
-    'welcome' | 'signin' | 'signup' | 'demo_select' | 'onboarding'
-  >('welcome');
+  const [showStartupIntro, setShowStartupIntro] = useState<boolean>(true);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
+  const [pathwayModalOpen, setPathwayModalOpen] = useState(false);
+  const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
+  const [pendingAccount, setPendingAccount] = useState<{ name: string; email: string } | null>(null);
+  const [selectedOnboardingPathway, setSelectedOnboardingPathway] = useState<OnboardingPathway>(
+    savedSession?.userProfile?.pathway || OnboardingPathway.GeneralFitness
+  );
 
   // Persist session changes to localStorage (without any passwords)
   useEffect(() => {
@@ -121,6 +135,7 @@ export default function App() {
         usingDemoData,
         workoutPlans,
         chatMessages,
+        activeTab,
       });
 
       if (!usingDemoData && userAccount.email) {
@@ -144,6 +159,7 @@ export default function App() {
     usingDemoData,
     workoutPlans,
     chatMessages,
+    activeTab,
   ]);
 
   // Complete Authentication & Onboarding
@@ -172,7 +188,7 @@ export default function App() {
       setProgressHistory([
         {
           id: `prog-init-${Date.now()}`,
-          dateIso: '2026-10-27',
+          dateIso: getLocalDateIso(),
           label: 'Start',
           weightKg: payload.profile.currentWeightKg,
           caloriesConsumed: 0,
@@ -215,6 +231,80 @@ export default function App() {
     setUserAccount(DEFAULT_UNAUTHENTICATED_ACCOUNT);
     setShowLandingPage(true);
     setActiveTab(NavigationTab.Dashboard);
+  };
+
+  // Open Sign In Modal
+  const handleOpenSignIn = () => {
+    setAuthModalTab('signin');
+    setAuthModalOpen(true);
+  };
+
+  // Open Sign Up / Get Started Modal
+  const handleOpenSignUp = () => {
+    setAuthModalTab('signup');
+    setAuthModalOpen(true);
+  };
+
+  // Handle successful Sign In
+  const handleSignInSuccess = (account: {
+    name: string;
+    email: string;
+    rememberMe: boolean;
+  }) => {
+    const registered = prototypeSessionStorage.findRegisteredUser(account.email);
+    const authedAccount: UserAccount = {
+      name: account.name || registered?.name || account.email.split('@')[0],
+      email: account.email,
+      isAuthenticated: true,
+      onboardingCompleted: true,
+      rememberMe: account.rememberMe,
+      isDemoAccount: false,
+    };
+    setUserAccount(authedAccount);
+    if (registered?.userProfile && registered?.goals) {
+      setUserProfile(registered.userProfile);
+      setGoals(registered.goals);
+    }
+    setUsingDemoData(false);
+    setAuthModalOpen(false);
+    setShowLandingPage(false);
+    setActiveTab(NavigationTab.Dashboard);
+  };
+
+  // Handle successful Sign Up -> Transition to Pathway Selection
+  const handleSignUpSuccess = (account: { name: string; email: string }) => {
+    setPendingAccount(account);
+    setAuthModalOpen(false);
+    setPathwayModalOpen(true);
+  };
+
+  // Handle Pathway confirmed -> Transition to Onboarding Wizard
+  const handlePathwayConfirmed = () => {
+    setPathwayModalOpen(false);
+    setOnboardingModalOpen(true);
+  };
+
+  // Handle Onboarding completed -> Launch Dashboard
+  const handleOnboardingCompleted = (
+    profile: UserProfile,
+    newGoals: NutritionGoals
+  ) => {
+    const finalAccount: UserAccount = {
+      name: pendingAccount?.name || userAccount.name || 'Friend',
+      email: pendingAccount?.email || userAccount.email || 'user@ascend.app',
+      isAuthenticated: true,
+      onboardingCompleted: true,
+      rememberMe: true,
+      isDemoAccount: false,
+    };
+    handleCompleteAuthAndOnboarding({
+      account: finalAccount,
+      profile,
+      goals: newGoals,
+      preloadDemoData: false,
+    });
+    setOnboardingModalOpen(false);
+    setShowLandingPage(false);
   };
 
   // Navigation handler
@@ -278,8 +368,38 @@ export default function App() {
         if (plan.id !== workoutId) return plan;
         return {
           ...plan,
+          exercises: plan.exercises.map((ex) => {
+            if (ex.id !== exerciseId) return ex;
+            const nextCompleted = !ex.completed;
+            const updatedSets = ex.completedSets
+              ? ex.completedSets.map((s) => ({ ...s, completed: nextCompleted }))
+              : undefined;
+            return {
+              ...ex,
+              completed: nextCompleted,
+              completedSets: updatedSets,
+            };
+          }),
+        };
+      })
+    );
+  };
+
+  const handleUpdateExerciseSets = (
+    workoutId: string,
+    exerciseId: string,
+    sets: ExerciseSetLog[]
+  ) => {
+    const allCompleted = sets.length > 0 && sets.every((s) => s.completed);
+    setWorkoutPlans((prev) =>
+      prev.map((plan) => {
+        if (plan.id !== workoutId) return plan;
+        return {
+          ...plan,
           exercises: plan.exercises.map((ex) =>
-            ex.id === exerciseId ? { ...ex, completed: !ex.completed } : ex
+            ex.id === exerciseId
+              ? { ...ex, completed: allCompleted, completedSets: sets }
+              : ex
           ),
         };
       })
@@ -384,31 +504,50 @@ export default function App() {
     setUsingDemoData(true);
   };
 
-  // Public Product Landing Page
-  if (showLandingPage) {
+  // Public Product Landing Page & Integrated Modern Auth/Onboarding Modals
+  if (showLandingPage || !userAccount.isAuthenticated || !userAccount.onboardingCompleted) {
     return (
-      <LandingPageView
-        onStartOnboarding={() => {
-          setAuthInitialScreen('onboarding');
-          setShowLandingPage(false);
-        }}
-        onOpenSignIn={() => {
-          setAuthInitialScreen('signin');
-          setShowLandingPage(false);
-        }}
-        onExploreDemo={handleDirectDemoEntry}
-      />
-    );
-  }
+      <>
+        {showStartupIntro && (
+          <StartupIntro onComplete={() => setShowStartupIntro(false)} />
+        )}
 
-  // Show Authentication & Onboarding Entry Flow if not signed in
-  if (!userAccount.isAuthenticated || !userAccount.onboardingCompleted) {
-    return (
-      <AuthOnboardingFlow
-        initialScreen={authInitialScreen}
-        onBackToLanding={() => setShowLandingPage(true)}
-        onCompleteAuthAndOnboarding={handleCompleteAuthAndOnboarding}
-      />
+        <LandingPageView
+          onStartOnboarding={handleOpenSignUp}
+          onOpenSignIn={handleOpenSignIn}
+          onExploreDemo={handleDirectDemoEntry}
+        />
+
+        <AuthModal
+          isOpen={authModalOpen}
+          initialTab={authModalTab}
+          onClose={() => setAuthModalOpen(false)}
+          onSignInSuccess={handleSignInSuccess}
+          onSignUpSuccess={handleSignUpSuccess}
+          onExploreDemo={handleDirectDemoEntry}
+        />
+
+        <PathwaySelectionModal
+          isOpen={pathwayModalOpen}
+          selectedPathway={selectedOnboardingPathway}
+          onSelectPathway={(pw) => {
+            setSelectedOnboardingPathway(pw);
+            setUserProfile((prev) => ({ ...prev, pathway: pw }));
+          }}
+          onConfirm={handlePathwayConfirmed}
+          onBackToLanding={() => setPathwayModalOpen(false)}
+        />
+
+        <OnboardingWizardModal
+          isOpen={onboardingModalOpen}
+          pathway={selectedOnboardingPathway}
+          onBackToPathway={() => {
+            setOnboardingModalOpen(false);
+            setPathwayModalOpen(true);
+          }}
+          onComplete={handleOnboardingCompleted}
+        />
+      </>
     );
   }
 
@@ -418,8 +557,8 @@ export default function App() {
     workoutPlans[0];
 
   return (
-    <div className="min-h-screen flex bg-[#F4F7FA] text-slate-900">
-      {/* Persistent Dark Navy Sidebar + Mobile Bottom Navigation */}
+    <div className="min-h-screen flex bg-slate-50/80 text-slate-900 selection:bg-sky-500/20 selection:text-sky-950">
+      {/* Modern Scandinavian Health-Tech Sidebar */}
       <Sidebar
         activeTab={activeTab}
         onSelectTab={(tab) => handleNavigate(tab)}
@@ -429,6 +568,7 @@ export default function App() {
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
         onViewLandingPage={() => setShowLandingPage(true)}
+        onSwitchPathway={() => setPathwayModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -440,9 +580,10 @@ export default function App() {
           onSelectTab={(tab) => handleNavigate(tab)}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
           onViewLandingPage={() => setShowLandingPage(true)}
+          onSwitchPathway={() => setPathwayModalOpen(true)}
         />
 
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pt-6">
+        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="max-w-6xl mx-auto">
             {activeTab === NavigationTab.Dashboard && (
               <DashboardView
@@ -478,6 +619,7 @@ export default function App() {
                 userPathway={userProfile.pathway}
                 onToggleExercise={handleToggleExercise}
                 onAddExercise={handleAddExercise}
+                onUpdateExerciseSets={handleUpdateExerciseSets}
               />
             )}
 
@@ -543,6 +685,21 @@ export default function App() {
           </div>
         </main>
       </div>
+
+      {/* Pathway Switcher Modal (Accessible from anywhere in the app) */}
+      <PathwaySelectionModal
+        isOpen={pathwayModalOpen}
+        selectedPathway={userProfile.pathway}
+        onSelectPathway={(pw) => {
+          handleChangePathway(pw);
+        }}
+        onConfirm={() => setPathwayModalOpen(false)}
+        onBackToLanding={() => setPathwayModalOpen(false)}
+      />
+
+      {showStartupIntro && (
+        <StartupIntro onComplete={() => setShowStartupIntro(false)} />
+      )}
     </div>
   );
 }

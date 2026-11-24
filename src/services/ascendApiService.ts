@@ -26,7 +26,7 @@ import {
  */
 
 export const FASTAPI_ENDPOINTS_SPEC = {
-  baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1',
+  baseUrl: (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || 'http://localhost:8000/api/v1',
   endpoints: [
     { method: 'POST', path: '/auth/login', description: 'Authenticate user and issue JWT session token' },
     { method: 'POST', path: '/auth/register', description: 'Create user account and initialize profile' },
@@ -35,7 +35,8 @@ export const FASTAPI_ENDPOINTS_SPEC = {
     { method: 'DELETE', path: '/intake/records/{record_id}', description: 'Delete logged food entry' },
     { method: 'PUT', path: '/users/me/goals', description: 'Update user profile & daily macro targets' },
     { method: 'GET', path: '/analytics/progress', description: 'Fetch time-series biometric & adherence logs' },
-    { method: 'POST', path: '/ai/recommendations', description: 'Generate context-aware Gemini nutrition insight' },
+    { method: 'POST', path: '/ai/chat', description: 'Interactive multi-turn Gemini coaching conversation' },
+    { method: 'POST', path: '/ai/recommendations', description: 'Generate context-aware Gemini nutrition insight & structured recommendations' },
   ],
 };
 
@@ -53,6 +54,7 @@ export interface PersistedSessionState {
   usingDemoData: boolean;
   workoutPlans?: WorkoutPlan[];
   chatMessages?: ChatMessage[];
+  activeTab?: NavigationTab;
 }
 
 export interface RegisteredPrototypeUser {
@@ -144,7 +146,7 @@ export function calculateScaledNutrients(
 
   const ratio = baseGrams > 0 ? totalGrams / baseGrams : 0;
 
-  const round1 = (val: number) => Math.round(val * 10) / 10;
+  const round1 = (val: number) => Number((Math.round(val * 10) / 10).toFixed(1));
   const roundInt = (val: number) => Math.round(val);
 
   return {
@@ -215,7 +217,7 @@ export function computeDailyTotals(
     }
   }
 
-  const round1 = (val: number) => Math.round(val * 10) / 10;
+  const round1 = (val: number) => Number((Math.round(val * 10) / 10).toFixed(1));
 
   return {
     calories: Math.round(calories),
@@ -259,11 +261,15 @@ export function filterFoodCatalog(
  * Calculates non-medical educational reference targets based on user profile settings and pathway.
  */
 export function computeRecommendedTargets(profile: UserProfile): NutritionGoals {
+  // Scientific Mifflin-St Jeor BMR Equation with biological sex attribution
+  // Male: 10 * weightKg + 6.25 * heightCm - 5 * age + 5
+  // Female: 10 * weightKg + 6.25 * heightCm - 5 * age - 161
+  const sexOffset = profile.biologicalSex === 'female' ? -161 : 5;
   const bmr =
     10 * profile.currentWeightKg +
     6.25 * profile.heightCm -
     5 * profile.age +
-    5;
+    sexOffset;
 
   const activityMultipliers: Record<ActivityLevel, number> = {
     [ActivityLevel.Sedentary]: 1.2,

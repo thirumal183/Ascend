@@ -138,6 +138,15 @@ export interface IntakeRecord {
   isUserLogged?: boolean;
 }
 
+export interface ExerciseSetLog {
+  setNum: number;
+  targetReps: string;
+  targetLoadKg: number;
+  actualReps?: number;
+  actualLoadKg?: number;
+  completed: boolean;
+}
+
 export interface ExerciseItem {
   id: string;
   name: string;
@@ -148,6 +157,7 @@ export interface ExerciseItem {
   restSeconds: number;
   completed: boolean;
   notes?: string;
+  completedSets?: ExerciseSetLog[];
 }
 
 export interface WorkoutPlan {
@@ -166,6 +176,7 @@ export interface UserProfile {
   pathway: OnboardingPathway;
   archetype: ProfileArchetype;
   goalType: FitnessGoalType;
+  biologicalSex?: 'male' | 'female' | 'unspecified';
   age: number;
   heightCm: number;
   currentWeightKg: number;

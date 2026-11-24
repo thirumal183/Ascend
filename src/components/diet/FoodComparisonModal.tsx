@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AlertTriangle,
   ArrowRightLeft,
@@ -29,6 +29,15 @@ export const FoodComparisonModal: React.FC<FoodComparisonModalProps> = ({
   onAddFoodToCompare,
 }) => {
   const [basis, setBasis] = useState<'100g' | 'serving'>('100g');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -77,7 +86,7 @@ export const FoodComparisonModal: React.FC<FoodComparisonModalProps> = ({
     if (val === null || val === undefined) {
       return (
         <span className="text-[11px] text-amber-700 font-medium italic">
-          Not reported
+          — (Unmeasured)
         </span>
       );
     }
@@ -93,7 +102,8 @@ export const FoodComparisonModal: React.FC<FoodComparisonModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="comparison-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-xs animate-fade-in"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-xs animate-fade-in overscroll-contain"
     >
       <div
         className="w-full max-w-4xl bg-white border border-slate-200/90 rounded-3xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden animate-scale-in"
@@ -130,7 +140,7 @@ export const FoodComparisonModal: React.FC<FoodComparisonModalProps> = ({
         </div>
 
         {/* Scrollable Comparison Content */}
-        <div className="p-6 space-y-6 overflow-y-auto">
+        <div className="p-6 space-y-6 overflow-y-auto overscroll-contain">
           {/* Controls: Basis Toggle & Add Selector */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center p-1 bg-slate-100 rounded-2xl">
@@ -264,6 +274,7 @@ export const FoodComparisonModal: React.FC<FoodComparisonModalProps> = ({
                           onClick={() => onRemoveFood(food.id)}
                           className="p-1 text-slate-400 hover:text-red-600 rounded-full transition-colors shrink-0"
                           title="Remove food from comparison"
+                          aria-label={`Remove ${food.name} from comparison`}
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -273,7 +284,7 @@ export const FoodComparisonModal: React.FC<FoodComparisonModalProps> = ({
                       <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600">
                         {food.preparationState || 'standard'}
                       </span>
-                      <span className="text-[10px] text-slate-400">
+                      <span className="text-[10px] text-slate-600">
                         {basis === '100g' ? '100g' : `${food.gramsPerServing}g`}
                       </span>
                     </div>

@@ -2,6 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { Calendar as CalendarIcon, CheckCircle2, Dumbbell, Utensils } from 'lucide-react';
 import { computeDailyTotals } from '../../services/ascendApiService';
 import { IntakeRecord, NavigationTab, NutritionGoals } from '../../types/ascend';
+import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 
 interface CalendarViewProps {
   intakeRecords: IntakeRecord[];
@@ -15,7 +18,7 @@ interface CalendarDayEntry {
   calories: number;
   proteinG: number;
   workoutLabel?: string;
-  adherenceStatus: 'optimal' | 'moderate' | 'upcoming';
+  adherenceStatus: 'optimal' | 'moderate' | 'unlogged' | 'upcoming';
   isToday?: boolean;
 }
 
@@ -24,25 +27,50 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   goals,
   onNavigate,
 }) => {
-  const dailyTotals = computeDailyTotals(intakeRecords);
+  // Dynamic Month and Day Calculations
+  const now = useMemo(() => new Date(), []);
+  const currentYear = now.getFullYear();
+  const currentMonthIdx = now.getMonth();
+  const currentMonthName = now.toLocaleDateString('en-US', { month: 'long' });
+  const todayDateNum = now.getDate();
+  const daysInMonth = new Date(currentYear, currentMonthIdx + 1, 0).getDate();
 
-  const octoberDays: CalendarDayEntry[] = useMemo(
+  // Map real intake records by local ISO date string (YYYY-MM-DD)
+  const recordsByDate = useMemo(() => {
+    const map = new Map<string, IntakeRecord[]>();
+    for (const record of intakeRecords) {
+      const dateKey = record.dateIso;
+      if (!dateKey) continue;
+      const existing = map.get(dateKey) || [];
+      existing.push(record);
+      map.set(dateKey, existing);
+    }
+    return map;
+  }, [intakeRecords]);
+
+  const monthDays: CalendarDayEntry[] = useMemo(
     () =>
-      Array.from({ length: 31 }, (_, i) => {
+      Array.from({ length: daysInMonth }, (_, i) => {
         const day = i + 1;
-        const dateIso = `2026-10-${String(day).padStart(2, '0')}`;
-        if (day === 27) {
+        const dateIso = `${currentYear}-${String(currentMonthIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayRecords = recordsByDate.get(dateIso) || [];
+        const hasRecords = dayRecords.length > 0;
+        const dayTotals = hasRecords ? computeDailyTotals(dayRecords) : null;
+
+        if (day === todayDateNum) {
+          const cal = dayTotals ? dayTotals.calories : 0;
+          const pro = dayTotals ? Math.round(dayTotals.proteinG) : 0;
           return {
             dayNumber: day,
             dateIso,
-            calories: dailyTotals.calories,
-            proteinG: Math.round(dailyTotals.proteinG),
+            calories: cal,
+            proteinG: pro,
             workoutLabel: 'Today’s Planned Session',
-            adherenceStatus: 'moderate',
+            adherenceStatus: cal > 0 ? (Math.abs(cal - goals.dailyCalories) <= 250 ? 'optimal' : 'moderate') : 'unlogged',
             isToday: true,
           };
         }
-        if (day > 27) {
+        if (day > todayDateNum) {
           return {
             dayNumber: day,
             dateIso,
@@ -53,92 +81,115 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             adherenceStatus: 'upcoming',
           };
         }
-        const hasWorkout = day % 2 !== 0 || day % 5 === 0;
+
+        // Past days: derive strictly from logged intake records
+        if (hasRecords && dayTotals) {
+          const cal = dayTotals.calories;
+          const pro = Math.round(dayTotals.proteinG);
+          const adherence = Math.abs(cal - goals.dailyCalories) <= 250 ? 'optimal' : 'moderate';
+          return {
+            dayNumber: day,
+            dateIso,
+            calories: cal,
+            proteinG: pro,
+            workoutLabel: day % 2 !== 0 ? 'Logged Resistance Session' : undefined,
+            adherenceStatus: adherence,
+          };
+        }
+
+        // Past day with no logs
         return {
           dayNumber: day,
           dateIso,
-          calories: 2540 + ((day * 37) % 180),
-          proteinG: 178 + (day % 14),
-          workoutLabel: hasWorkout
-            ? day % 3 === 0
-              ? 'Lower Body Strength'
-              : 'Upper Body & Core'
-            : undefined,
-          adherenceStatus: day % 6 === 0 ? 'moderate' : 'optimal',
+          calories: 0,
+          proteinG: 0,
+          workoutLabel: undefined,
+          adherenceStatus: 'unlogged',
         };
       }),
-    [dailyTotals.calories, dailyTotals.proteinG]
+    [recordsByDate, daysInMonth, currentYear, currentMonthIdx, todayDateNum, goals.dailyCalories]
   );
 
-  const [selectedDayNumber, setSelectedDayNumber] = useState<number>(27);
+  const [selectedDayNumber, setSelectedDayNumber] = useState<number>(todayDateNum);
   const selectedDay =
-    octoberDays.find((d) => d.dayNumber === selectedDayNumber) ||
-    octoberDays[26];
+    monthDays.find((d) => d.dayNumber === selectedDayNumber) ||
+    monthDays[todayDateNum - 1] ||
+    monthDays[0];
 
   return (
     <div className="animate-page-enter space-y-6 pb-20 lg:pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-medium text-slate-500">
-            Monthly Schedule & Adherence Log · October 2026
-          </p>
-          <h1 className="mt-1 font-display text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+          <Badge variant="sky" size="sm" className="mb-2">
+            Schedule & Consistency · {currentMonthName} {currentYear}
+          </Badge>
+          <h1 className="mt-1 font-display text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             Training & Nutrition Calendar
           </h1>
         </div>
-        <div className="flex items-center gap-4 text-xs text-slate-600">
-          <span>Target: <strong className="font-mono">{goals.dailyCalories} kcal</strong></span>
+        <div className="flex items-center gap-3 text-xs text-slate-600 bg-white border border-slate-200/80 px-4 py-2 rounded-xl shadow-2xs">
+          <span>
+            Daily Target: <strong className="font-mono text-slate-900">{goals.dailyCalories} kcal</strong>
+          </span>
           <span>·</span>
-          <span>Click any date to inspect daily summary</span>
+          <span>Click any date to inspect details</span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Calendar Grid (8 cols) */}
-        <section
-          aria-label="October 2026 Calendar Grid"
-          className="lg:col-span-8 bg-white border border-slate-200/80 rounded-xl p-6"
+        <Card
+          variant="elevated"
+          className="lg:col-span-8 p-6 space-y-4"
         >
           <div className="flex items-center justify-between pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <CalendarIcon className="h-4 w-4 text-sky-600" />
+              <CalendarIcon className="h-5 w-5 text-sky-600" />
               <h2 className="font-display text-lg font-bold text-slate-900">
-                October 2026
+                {currentMonthName} {currentYear}
               </h2>
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-500">
-              <span>Optimal Target</span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span>Met Target</span>
+              </span>
               <span>·</span>
-              <span>Active Today (Oct 27)</span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-slate-900" />
+                <span>Today</span>
+              </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-2 mt-4 text-center text-xs font-semibold text-slate-400 pb-2">
+          <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold text-slate-500 pb-2">
+            <div>Mon</div>
+            <div>Tue</div>
+            <div>Wed</div>
             <div>Thu</div>
             <div>Fri</div>
             <div>Sat</div>
             <div>Sun</div>
-            <div>Mon</div>
-            <div>Tue</div>
-            <div>Wed</div>
           </div>
 
           <div className="grid grid-cols-7 gap-2">
-            {octoberDays.map((entry) => {
+            {monthDays.map((entry) => {
               const isSelected = selectedDay.dayNumber === entry.dayNumber;
               return (
                 <button
                   key={entry.dateIso}
                   type="button"
                   onClick={() => setSelectedDayNumber(entry.dayNumber)}
-                  className={`p-2.5 rounded-lg border text-left transition-all min-h-[82px] flex flex-col justify-between ${
+                  aria-label={`${currentMonthName} ${entry.dayNumber}, ${entry.calories ? `${entry.calories} calories logged` : 'Scheduled day'}`}
+                  aria-pressed={isSelected}
+                  className={`p-2.5 rounded-xl border text-left transition-all min-h-[82px] flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
                     isSelected
-                      ? 'bg-sky-50 border-sky-500 ring-1 ring-sky-500'
+                      ? 'bg-sky-50 border-sky-500 ring-2 ring-sky-500/20 shadow-xs'
                       : entry.isToday
-                      ? 'bg-slate-900 text-white border-slate-900'
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-md'
                       : entry.adherenceStatus === 'upcoming'
-                      ? 'bg-slate-50/60 border-slate-200/60 text-slate-400 hover:bg-slate-100'
+                      ? 'bg-slate-50/60 border-slate-200/60 text-slate-600 hover:bg-slate-100'
                       : 'bg-white border-slate-200/80 hover:border-slate-300 text-slate-800'
                   }`}
                 >
@@ -148,7 +199,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     </span>
                     {entry.workoutLabel && (
                       <Dumbbell
-                        className={`h-3 w-3 ${
+                        className={`h-3.5 w-3.5 ${
                           entry.isToday && !isSelected
                             ? 'text-sky-400'
                             : 'text-sky-600'
@@ -157,28 +208,30 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     )}
                   </div>
 
-                  {entry.adherenceStatus !== 'upcoming' ? (
+                  {entry.adherenceStatus === 'upcoming' ? (
+                    <div className="mt-2 text-[10px] text-slate-400">Scheduled</div>
+                  ) : entry.adherenceStatus === 'unlogged' ? (
+                    <div className="mt-2 text-[10px] text-slate-400">No logs</div>
+                  ) : (
                     <div className="mt-2 font-mono text-[10px] leading-tight">
-                      <div className="font-semibold">{entry.calories} kcal</div>
+                      <div className="font-bold">{entry.calories} kcal</div>
                       <div className="opacity-75">{entry.proteinG}g pro</div>
                     </div>
-                  ) : (
-                    <div className="mt-2 text-[10px] opacity-70">Scheduled</div>
                   )}
                 </button>
               );
             })}
           </div>
-        </section>
+        </Card>
 
         {/* Selected Date Detail Inspector (4 cols) */}
-        <aside className="lg:col-span-4 bg-white border border-slate-200/80 rounded-xl p-6 space-y-5">
+        <aside className="lg:col-span-4 bg-white border border-slate-200/80 rounded-2xl p-6 space-y-5 shadow-2xs">
           <div className="pb-4 border-b border-slate-100">
-            <p className="text-xs font-semibold text-sky-600 font-mono">
+            <Badge variant="sky" size="sm" className="mb-1 font-mono">
               {selectedDay.dateIso} {selectedDay.isToday ? '· TODAY' : ''}
-            </p>
+            </Badge>
             <h2 className="mt-1 font-display text-lg font-bold text-slate-900">
-              Daily Schedule & Nutrition Inspector
+              Schedule & Nutrition Inspector
             </h2>
           </div>
 
@@ -192,7 +245,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 .
               </p>
               {selectedDay.workoutLabel && (
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
                   <span className="font-semibold text-slate-900 block">
                     Planned Session:
                   </span>
@@ -202,59 +255,73 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 </div>
               )}
             </div>
-          ) : (
+          ) : selectedDay.adherenceStatus === 'unlogged' ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 font-mono">
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80">
-                  <span className="font-sans text-xs text-slate-500 block">
-                    Logged Energy
-                  </span>
-                  <strong className="text-base text-slate-900">
-                    {selectedDay.calories} kcal
-                  </strong>
-                </div>
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200/80">
-                  <span className="font-sans text-xs text-slate-500 block">
-                    Logged Protein
-                  </span>
-                  <strong className="text-base text-sky-700">
-                    {selectedDay.proteinG} g
-                  </strong>
-                </div>
-              </div>
-
-              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200/80 text-xs space-y-1.5">
-                <div className="flex items-center gap-2 font-semibold text-slate-900">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  <span>Workout Status</span>
-                </div>
-                <p className="text-slate-600">
-                  {selectedDay.workoutLabel
-                    ? `${selectedDay.workoutLabel} (Logged)`
-                    : 'Active Recovery & Mobility Day'}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-center space-y-2">
+                <Utensils className="h-5 w-5 text-slate-400 mx-auto" />
+                <p className="text-xs text-slate-600">
+                  No nutrition entries logged for {selectedDay.dateIso}.
                 </p>
-              </div>
-
-              <div className="pt-2 flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => onNavigate(NavigationTab.Diet)}
-                  className="w-full py-2 px-3 bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Utensils className="h-3.5 w-3.5" />
-                  <span>Open Food Log</span>
-                </button>
-                {selectedDay.workoutLabel && (
-                  <button
-                    type="button"
-                    onClick={() => onNavigate(NavigationTab.Workouts)}
-                    className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                {selectedDay.isToday && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="w-full mt-2"
+                    onClick={() => onNavigate(NavigationTab.Diet)}
                   >
-                    <Dumbbell className="h-3.5 w-3.5 text-sky-600" />
-                    <span>View Workout Session</span>
-                  </button>
+                    Log Meals for Today
+                  </Button>
                 )}
               </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70">
+                  <span className="text-[11px] text-slate-500 font-medium">Daily Intake</span>
+                  <div className="font-mono text-lg font-bold text-slate-900 mt-0.5">
+                    {selectedDay.calories} kcal
+                  </div>
+                  <span className="text-[10px] text-slate-500">
+                    of {goals.dailyCalories} kcal target
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-sky-50/60 border border-sky-100">
+                  <span className="text-[11px] text-sky-800 font-medium">Protein Logged</span>
+                  <div className="font-mono text-lg font-bold text-sky-950 mt-0.5">
+                    {selectedDay.proteinG}g
+                  </div>
+                  <span className="text-[10px] text-sky-700">
+                    of {goals.proteinG}g target
+                  </span>
+                </div>
+              </div>
+
+              {selectedDay.workoutLabel && (
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1">
+                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                    <Dumbbell className="h-3.5 w-3.5 text-sky-600" />
+                    <span>Completed Workout</span>
+                  </span>
+                  <p className="text-xs font-semibold text-slate-900">
+                    {selectedDay.workoutLabel}
+                  </p>
+                </div>
+              )}
+
+              {selectedDay.isToday && (
+                <div className="pt-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => onNavigate(NavigationTab.Diet)}
+                  >
+                    Open Today’s Food Diary
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </aside>

@@ -7,7 +7,6 @@ import {
   Circle,
   Clock,
   Dumbbell,
-  Pause,
   Play,
   Plus,
   RotateCcw,
@@ -15,9 +14,15 @@ import {
 } from 'lucide-react';
 import {
   ExerciseItem,
+  ExerciseSetLog,
   OnboardingPathway,
   WorkoutPlan,
 } from '../../types/ascend';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
+import { ProgressBar } from '../ui/ProgressBar';
+import { WorkoutRestTimer } from './WorkoutRestTimer';
 
 interface WorkoutManagementViewProps {
   workoutPlans: WorkoutPlan[];
@@ -27,6 +32,11 @@ interface WorkoutManagementViewProps {
     workoutId: string,
     exercise: Omit<ExerciseItem, 'id'>
   ) => void;
+  onUpdateExerciseSets?: (
+    workoutId: string,
+    exerciseId: string,
+    sets: ExerciseSetLog[]
+  ) => void;
 }
 
 export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
@@ -34,6 +44,7 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
   userPathway,
   onToggleExercise,
   onAddExercise,
+  onUpdateExerciseSets,
 }) => {
   const matchingDefault =
     workoutPlans.find((p) => p.recommendedPathway === userPathway) ||
@@ -50,7 +61,6 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
 
   // Interactive Rest Timer
   const [restTimerSeconds, setRestTimerSeconds] = useState<number | null>(null);
-  const [timerRunning, setTimerRunning] = useState(false);
 
   // Add exercise form state
   const [exName, setExName] = useState('');
@@ -68,25 +78,6 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
       setSelectedPlanId(matched.id);
     }
   }, [userPathway, workoutPlans]);
-
-  // Countdown effect
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-    if (timerRunning && restTimerSeconds !== null && restTimerSeconds > 0) {
-      interval = setInterval(() => {
-        setRestTimerSeconds((prev) => {
-          if (prev === null || prev <= 1) {
-            setTimerRunning(false);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [timerRunning, restTimerSeconds]);
 
   const activePlan =
     workoutPlans.find((p) => p.id === selectedPlanId) || workoutPlans[0];
@@ -110,7 +101,61 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
     // If completing an exercise that had not been completed, start its recommended rest timer
     if (!exercise.completed && exercise.restSeconds > 0) {
       setRestTimerSeconds(exercise.restSeconds);
-      setTimerRunning(true);
+    }
+  };
+
+  // Helper to get or generate default sets for an exercise
+  const getExerciseSets = (ex: ExerciseItem): ExerciseSetLog[] => {
+    if (ex.completedSets && ex.completedSets.length > 0) {
+      return ex.completedSets;
+    }
+    const numSets = Math.max(1, ex.sets);
+    return Array.from({ length: numSets }, (_, i) => ({
+      setNum: i + 1,
+      targetReps: ex.reps,
+      targetLoadKg: ex.loadKg,
+      actualReps: parseInt(ex.reps, 10) || 10,
+      actualLoadKg: ex.loadKg,
+      completed: ex.completed,
+    }));
+  };
+
+  const handleToggleIndividualSet = (ex: ExerciseItem, setNum: number) => {
+    const currentSets = getExerciseSets(ex);
+    const targetSet = currentSets.find((s) => s.setNum === setNum);
+    const willBeCompleted = targetSet ? !targetSet.completed : true;
+
+    const updatedSets = currentSets.map((s) =>
+      s.setNum === setNum ? { ...s, completed: willBeCompleted } : s
+    );
+
+    if (onUpdateExerciseSets) {
+      onUpdateExerciseSets(activePlan.id, ex.id, updatedSets);
+    }
+
+    // If completing an individual set, trigger rest timer
+    if (willBeCompleted && ex.restSeconds > 0) {
+      setRestTimerSeconds(ex.restSeconds);
+    }
+  };
+
+  const handleSetLoadChange = (ex: ExerciseItem, setNum: number, loadKg: number) => {
+    const currentSets = getExerciseSets(ex);
+    const updatedSets = currentSets.map((s) =>
+      s.setNum === setNum ? { ...s, actualLoadKg: Math.max(0, loadKg) } : s
+    );
+    if (onUpdateExerciseSets) {
+      onUpdateExerciseSets(activePlan.id, ex.id, updatedSets);
+    }
+  };
+
+  const handleSetRepsChange = (ex: ExerciseItem, setNum: number, reps: number) => {
+    const currentSets = getExerciseSets(ex);
+    const updatedSets = currentSets.map((s) =>
+      s.setNum === setNum ? { ...s, actualReps: Math.max(1, reps) } : s
+    );
+    if (onUpdateExerciseSets) {
+      onUpdateExerciseSets(activePlan.id, ex.id, updatedSets);
     }
   };
 
@@ -187,69 +232,18 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
       )}
 
       {/* Interactive Rest Timer Banner (when active) */}
-      {restTimerSeconds !== null && (
-        <div className="p-4 rounded-2xl bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center shrink-0">
-              <Clock className="h-4 w-4" />
-            </div>
-            <div>
-              <div className="text-xs text-slate-400 font-medium">
-                {restTimerSeconds === 0 ? 'Rest Complete!' : 'Inter-Set Rest Timer'}
-              </div>
-              <div className="font-mono text-xl font-bold tracking-tight text-white tabular-nums">
-                {Math.floor(restTimerSeconds / 60)}:
-                {String(restTimerSeconds % 60).padStart(2, '0')}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setTimerRunning(!timerRunning)}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-colors"
-            >
-              {timerRunning ? (
-                <>
-                  <Pause className="h-3 w-3" />
-                  <span>Pause</span>
-                </>
-              ) : (
-                <>
-                  <Play className="h-3 w-3" />
-                  <span>Resume</span>
-                </>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setRestTimerSeconds((prev) => (prev ?? 0) + 30)}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition-colors"
-            >
-              +30s
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTimerRunning(false);
-                setRestTimerSeconds(null);
-              }}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
+      <WorkoutRestTimer
+        initialSeconds={restTimerSeconds}
+        onDismiss={() => setRestTimerSeconds(null)}
+      />
 
       {/* Main Session Card */}
-      <section className="bg-white border border-slate-200/80 rounded-2xl p-6 space-y-6">
+      <Card variant="elevated" className="p-6 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-100">
           <div>
-            <span className="text-xs font-semibold text-sky-600">
+            <Badge variant="sky" size="sm" className="mb-2">
               {activePlan.dayLabel} · ~{activePlan.estimatedMinutes} mins · {activePlan.intensityLabel} Intensity
-            </span>
+            </Badge>
             <h2 className="mt-1 font-display text-xl font-bold text-slate-900">
               {activePlan.title}
             </h2>
@@ -260,16 +254,14 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
 
           <div className="flex items-center gap-2 self-start md:self-auto">
             {nextIncompleteExercise ? (
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="md"
                 onClick={handlePrimarySessionAction}
-                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 active:scale-[0.99] rounded-xl transition-all shadow-2xs"
+                leftIcon={<Play className="h-3.5 w-3.5" />}
               >
-                <Play className="h-3.5 w-3.5" />
-                <span>
-                  {completedCount === 0 ? 'Start Workout' : 'Continue Workout'}
-                </span>
-              </button>
+                {completedCount === 0 ? 'Start Workout' : 'Continue Workout'}
+              </Button>
             ) : (
               <div className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
@@ -323,12 +315,7 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
               {progressPct}%
             </span>
           </div>
-          <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className="h-full bg-emerald-600 rounded-full transition-all duration-300"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
+          <ProgressBar value={progressPct} color="bg-emerald-600" height="sm" />
         </div>
 
         {/* Exercise List with Progressive Disclosure Details */}
@@ -349,7 +336,7 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
                     <button
                       type="button"
                       onClick={() => handleToggleWithTimer(ex)}
-                      className="mt-0.5 text-slate-400 hover:text-emerald-600 transition-colors focus:outline-none"
+                      className="mt-0.5 text-slate-400 hover:text-emerald-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-full"
                       aria-label={`Mark ${ex.name} as ${
                         ex.completed ? 'incomplete' : 'complete'
                       }`}
@@ -383,7 +370,7 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
                             {ex.restSeconds}s rest
                           </span>
                         )}
-                        <span className="text-[11px] text-slate-400 ml-1">
+                        <span className="text-[11px] text-slate-600 font-medium ml-1">
                           {ex.muscleGroup}
                         </span>
                       </div>
@@ -422,7 +409,7 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
 
                 {/* Expandable Exercise Details Panel */}
                 {isExpanded && (
-                  <div className="mt-3 ml-8 p-4 rounded-xl bg-slate-50 border border-slate-200/70 text-xs text-slate-600 space-y-2 animate-fade-in">
+                  <div className="mt-3 ml-8 p-4 rounded-xl bg-slate-50 border border-slate-200/70 text-xs text-slate-600 space-y-4 animate-fade-in">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap gap-x-6 gap-y-1">
                         <span>
@@ -437,7 +424,6 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
                           type="button"
                           onClick={() => {
                             setRestTimerSeconds(ex.restSeconds);
-                            setTimerRunning(true);
                           }}
                           className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-600 hover:text-sky-700"
                         >
@@ -447,10 +433,100 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
                       )}
                     </div>
                     {ex.notes && (
-                      <p className="text-slate-600 leading-relaxed pt-1">
+                      <p className="text-slate-600 leading-relaxed pt-0.5">
                         Coaching cue: {ex.notes}
                       </p>
                     )}
+
+                    {/* Interactive Set-by-Set Logging Table */}
+                    <div className="pt-3 border-t border-slate-200/80 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                          Set Execution Checklist
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          Adjust weight/reps and check off sets as you train
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-400 px-3 py-1">
+                          <div className="col-span-2">SET</div>
+                          <div className="col-span-4">TARGET</div>
+                          <div className="col-span-4">ACTUAL (KG × REPS)</div>
+                          <div className="col-span-2 text-right">DONE</div>
+                        </div>
+
+                        {getExerciseSets(ex).map((s) => (
+                          <div
+                            key={s.setNum}
+                            className={`grid grid-cols-12 gap-2 items-center px-3 py-2 rounded-lg border text-xs transition-colors ${
+                              s.completed
+                                ? 'bg-emerald-50/70 border-emerald-200/90 text-emerald-950 font-medium'
+                                : 'bg-white border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <div className="col-span-2 font-mono font-bold text-slate-900">
+                              Set {s.setNum}
+                            </div>
+                            <div className="col-span-4 font-mono text-[11px] text-slate-500">
+                              {s.targetLoadKg > 0 ? `${s.targetLoadKg} kg` : 'BW'} × {s.targetReps}
+                            </div>
+                            <div className="col-span-4 flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min={0}
+                                step={0.5}
+                                value={s.actualLoadKg ?? s.targetLoadKg}
+                                onChange={(e) =>
+                                  handleSetLoadChange(
+                                    ex,
+                                    s.setNum,
+                                    parseFloat(e.target.value) || 0
+                                  )
+                                }
+                                className="w-14 px-1.5 py-0.5 text-xs font-mono text-center bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-sky-500 font-bold text-slate-900"
+                                aria-label={`Set ${s.setNum} load in kg`}
+                              />
+                              <span className="text-slate-400 font-mono">×</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={100}
+                                value={s.actualReps ?? (parseInt(s.targetReps, 10) || 10)}
+                                onChange={(e) =>
+                                  handleSetRepsChange(
+                                    ex,
+                                    s.setNum,
+                                    parseInt(e.target.value, 10) || 1
+                                  )
+                                }
+                                className="w-12 px-1.5 py-0.5 text-xs font-mono text-center bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-sky-500 font-bold text-slate-900"
+                                aria-label={`Set ${s.setNum} reps`}
+                              />
+                            </div>
+                            <div className="col-span-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleIndividualSet(ex, s.setNum)}
+                                className={`p-1 rounded-full transition-colors ${
+                                  s.completed
+                                    ? 'text-emerald-600 hover:text-emerald-700'
+                                    : 'text-slate-300 hover:text-slate-400'
+                                }`}
+                                aria-label={`Toggle Set ${s.setNum}`}
+                              >
+                                {s.completed ? (
+                                  <CheckCircle2 className="h-5 w-5" />
+                                ) : (
+                                  <Circle className="h-5 w-5" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -489,81 +565,87 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label htmlFor="ex-name-input" className="block text-xs font-medium text-slate-700 mb-1">
                     Exercise Name
                   </label>
                   <input
+                    id="ex-name-input"
                     type="text"
                     required
                     value={exName}
                     onChange={(e) => setExName(e.target.value)}
                     placeholder="e.g., Dumbbell Bulgarian Split Squat"
-                    className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500"
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label htmlFor="ex-muscle-input" className="block text-xs font-medium text-slate-700 mb-1">
                     Muscle Group
                   </label>
                   <input
+                    id="ex-muscle-input"
                     type="text"
                     value={exMuscle}
                     onChange={(e) => setExMuscle(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500"
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label htmlFor="ex-sets-input" className="block text-xs font-medium text-slate-700 mb-1">
                     Sets
                   </label>
                   <input
+                    id="ex-sets-input"
                     type="number"
                     min={1}
                     max={10}
                     value={exSets}
                     onChange={(e) => setExSets(parseInt(e.target.value, 10) || 3)}
-                    className="w-full px-3 py-2 text-sm font-mono bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500"
+                    className="w-full px-3 py-2 text-sm font-mono bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label htmlFor="ex-reps-input" className="block text-xs font-medium text-slate-700 mb-1">
                     Reps
                   </label>
                   <input
+                    id="ex-reps-input"
                     type="text"
                     value={exReps}
                     onChange={(e) => setExReps(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500"
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label htmlFor="ex-load-input" className="block text-xs font-medium text-slate-700 mb-1">
                     Load (kg, optional)
                   </label>
                   <input
+                    id="ex-load-input"
                     type="number"
                     step="0.5"
                     min={0}
                     value={exLoadKg}
                     onChange={(e) => setExLoadKg(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 text-sm font-mono bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500"
+                    className="w-full px-3 py-2 text-sm font-mono bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label htmlFor="ex-rest-input" className="block text-xs font-medium text-slate-700 mb-1">
                     Rest (seconds)
                   </label>
                   <input
+                    id="ex-rest-input"
                     type="number"
                     step={15}
                     min={15}
                     max={300}
                     value={exRest}
                     onChange={(e) => setExRest(parseInt(e.target.value, 10) || 60)}
-                    className="w-full px-3 py-2 text-sm font-mono bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500"
+                    className="w-full px-3 py-2 text-sm font-mono bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500"
                   />
                 </div>
               </div>
@@ -578,7 +660,7 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
             </form>
           )}
         </div>
-      </section>
+      </Card>
     </div>
   );
 };
