@@ -6,7 +6,7 @@ via Pydantic Settings.
 
 from pathlib import Path
 from typing import Annotated, Any
-from urllib.parse import quote_plus
+from urllib.parse import parse_qsl, quote_plus, urlencode, urlsplit, urlunsplit
 from pydantic import (
     AnyHttpUrl,
     BeforeValidator,
@@ -66,10 +66,14 @@ class Settings(BaseSettings):
     # Optional explicit connection URI (overrides individual components if provided)
     DATABASE_URL: str | None = None
 
-    # Connection Pool Settings
+    # Connection Pool & Timeout Settings (tuned for managed/serverless PostgreSQL)
     DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 20
     DATABASE_POOL_PRE_PING: bool = True
+    DATABASE_POOL_RECYCLE: int = 300
+    DATABASE_CONNECT_TIMEOUT: float = 10.0
+    DATABASE_COMMAND_TIMEOUT: float = 15.0
+    MAX_REQUEST_BODY_BYTES: int = 1_048_576
 
     # Security & Tokens
     RATE_LIMIT_ENABLED: bool = True
@@ -84,13 +88,16 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
-        """Reject insecure default or short SECRET_KEY outside local development."""
-        if self.ENVIRONMENT.lower() != "development":
+        """Reject insecure default/short SECRET_KEY or DEBUG=True in production."""
+        env = self.ENVIRONMENT.lower()
+        if env != "development":
             if self.SECRET_KEY == self.DEV_INSECURE_SECRET_KEY or len(self.SECRET_KEY) < 32:
                 raise ValueError(
                     "SECRET_KEY must be overridden with a cryptographically random >=32-char value "
                     "when ENVIRONMENT is not 'development'."
                 )
+        if env == "production" and self.DEBUG:
+            raise ValueError("DEBUG must be False when ENVIRONMENT is 'production'.")
         return self
 
     # CORS Allowed Origins
@@ -110,13 +117,17 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def async_database_uri(self) -> str:
-        """Constructs an asyncpg PostgreSQL connection URI with URL-encoded credentials."""
+        """Constructs an asyncpg PostgreSQL connection URI, stripping incompatible libpq SSL query params."""
         if self.DATABASE_URL:
-            # Ensure asyncpg driver is specified
             url = self.DATABASE_URL
             if url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
-                return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-            return url
+                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            parts = urlsplit(url)
+            filtered_qs = [
+                (k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+                if k.lower() not in {"sslmode", "channel_binding"}
+            ]
+            return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(filtered_qs), parts.fragment))
 
         user = quote_plus(self.POSTGRES_USER)
         password = quote_plus(self.POSTGRES_PASSWORD)
@@ -124,6 +135,20 @@ class Settings(BaseSettings):
             f"postgresql+asyncpg://{user}:{password}"
             f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
+
+    @property
+    def async_connect_args(self) -> dict[str, Any]:
+        """Builds asyncpg connect_args including TLS and PgBouncer compatibility for Neon/Supabase."""
+        args: dict[str, Any] = {
+            "timeout": self.DATABASE_CONNECT_TIMEOUT,
+            "command_timeout": self.DATABASE_COMMAND_TIMEOUT,
+        }
+        raw_url = (self.DATABASE_URL or "").lower()
+        if "sslmode=require" in raw_url or "sslmode=verify" in raw_url:
+            args["ssl"] = "require"
+        if "-pooler" in raw_url:
+            args["statement_cache_size"] = 0
+        return args
 
     @computed_field  # type: ignore[prop-decorator]
     @property

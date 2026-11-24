@@ -49,16 +49,35 @@ def test_cors_origins_parsing():
 
 
 def test_production_secret_key_validator():
-    """AUD-P1-08: Non-development environments must reject default or short SECRET_KEY."""
+    """AUD-P1-08 & Phase 6: Non-development environments reject default/short SECRET_KEY and DEBUG=True in production."""
     with pytest.raises(ValueError, match="SECRET_KEY"):
-        Settings(_env_file=None, ENVIRONMENT="production")
+        Settings(_env_file=None, ENVIRONMENT="production", DEBUG=False)
 
     with pytest.raises(ValueError, match="SECRET_KEY"):
-        Settings(_env_file=None, ENVIRONMENT="staging", SECRET_KEY="short-key")
+        Settings(_env_file=None, ENVIRONMENT="staging", SECRET_KEY="short-key", DEBUG=False)
+
+    with pytest.raises(ValueError, match="DEBUG"):
+        Settings(
+            _env_file=None,
+            ENVIRONMENT="production",
+            DEBUG=True,
+            SECRET_KEY="a-very-strong-random-production-secret-key-at-least-32-chars",
+        )
 
     prod_settings = Settings(
         _env_file=None,
         ENVIRONMENT="production",
+        DEBUG=False,
         SECRET_KEY="a-very-strong-random-production-secret-key-at-least-32-chars",
     )
     assert prod_settings.ENVIRONMENT == "production"
+    assert prod_settings.DEBUG is False
+
+
+def test_neon_database_url_ssl_and_pooler_parsing():
+    """Phase 6: async_database_uri strips sslmode/channel_binding and configures async_connect_args for Neon."""
+    neon_url = "postgresql://user:pass@ep-cool-123-pooler.us-east-2.aws.neon.tech/ascend?sslmode=require&channel_binding=require"
+    s = Settings(_env_file=None, DATABASE_URL=neon_url)
+    assert s.async_database_uri == "postgresql+asyncpg://user:pass@ep-cool-123-pooler.us-east-2.aws.neon.tech/ascend"
+    assert s.async_connect_args["ssl"] == "require"
+    assert s.async_connect_args["statement_cache_size"] == 0

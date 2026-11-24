@@ -23,8 +23,9 @@ engine: AsyncEngine = create_async_engine(
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     pool_pre_ping=settings.DATABASE_POOL_PRE_PING,
+    pool_recycle=settings.DATABASE_POOL_RECYCLE,
     echo=settings.DEBUG and settings.ENVIRONMENT == "development",
-    connect_args={"timeout": 3.0, "command_timeout": 3.0},
+    connect_args=settings.async_connect_args,
 )
 
 # Asynchronous session factory
@@ -66,12 +67,12 @@ async def check_database_connection() -> tuple[bool, float | None, str | None]:
             async with engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
 
-        # Fast timeout probe (max 3 seconds)
-        await asyncio.wait_for(_probe(), timeout=3.0)
+        await asyncio.wait_for(_probe(), timeout=settings.DATABASE_CONNECT_TIMEOUT)
         latency_ms = (time.perf_counter() - start_time) * 1000
         return True, round(latency_ms, 2), None
     except Exception as exc:
-        return False, None, str(exc)
+        detail = str(exc) if settings.DEBUG else "Database connection probe failed."
+        return False, None, detail
 
 
 async def dispose_engine() -> None:

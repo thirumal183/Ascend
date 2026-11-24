@@ -50,6 +50,27 @@ def create_application() -> FastAPI:
             allow_headers=["Authorization", "Content-Type", "Accept"],
         )
 
+    # Request Size Guard Middleware (protects free-tier RAM from oversized payloads)
+    @app.middleware("http")
+    async def request_size_limit_middleware(request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > settings.MAX_REQUEST_BODY_BYTES:
+                    return JSONResponse(
+                        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                        content={
+                            "error": {
+                                "code": "PAYLOAD_TOO_LARGE",
+                                "message": "Request payload exceeds maximum allowed size.",
+                                "details": {"maxBytes": settings.MAX_REQUEST_BODY_BYTES},
+                            }
+                        },
+                    )
+            except ValueError:
+                pass
+        return await call_next(request)
+
     # Browser Security Headers Middleware
     @app.middleware("http")
     async def security_headers_middleware(request: Request, call_next):
