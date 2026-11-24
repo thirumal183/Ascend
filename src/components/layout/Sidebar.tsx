@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Activity,
-  BarChart3,
+  ArrowRightLeft,
   Calendar,
   Dumbbell,
   FileSpreadsheet,
@@ -10,11 +10,11 @@ import {
   Settings,
   Sparkles,
   Target,
-  UserCheck,
   Utensils,
   X,
 } from 'lucide-react';
-import { NavigationTab, UserAccount, UserProfile } from '../../types/ascend';
+import { NavigationTab, OnboardingPathway, UserAccount, UserProfile } from '../../types/ascend';
+import { AscendLogo } from '../brand/AscendLogo';
 
 interface SidebarProps {
   activeTab: NavigationTab;
@@ -24,6 +24,8 @@ interface SidebarProps {
   onSignOut: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  onViewLandingPage?: () => void;
+  onSwitchPathway?: () => void;
 }
 
 interface NavItemConfig {
@@ -34,7 +36,7 @@ interface NavItemConfig {
 
 const PRIMARY_NAV_ITEMS: NavItemConfig[] = [
   { id: NavigationTab.Dashboard, label: 'Overview', icon: LayoutDashboard },
-  { id: NavigationTab.Diet, label: 'Diet', icon: Utensils },
+  { id: NavigationTab.Diet, label: 'Diet & Meals', icon: Utensils },
   { id: NavigationTab.Workouts, label: 'Workouts', icon: Dumbbell },
   { id: NavigationTab.Progress, label: 'Progress', icon: Activity },
   { id: NavigationTab.Goals, label: 'Goals', icon: Target },
@@ -54,185 +56,246 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSignOut,
   mobileOpen,
   onCloseMobile,
+  onViewLandingPage,
+  onSwitchPathway,
 }) => {
   const handleNav = (tab: NavigationTab) => {
     onSelectTab(tab);
     onCloseMobile();
   };
 
+  const pathwayTheme = (() => {
+    switch (userProfile.pathway) {
+      case OnboardingPathway.AthletePerformance:
+        return {
+          name: 'Athlete Performance',
+          badgeBg: 'bg-sky-50 text-sky-700 border-sky-200/80',
+          dot: 'bg-sky-500',
+          activePill: 'bg-sky-50/80 text-sky-950 border-sky-200/80 shadow-xs font-semibold',
+          activeIcon: 'text-sky-600',
+          activeBar: 'bg-sky-500',
+          glow: 'from-sky-500/20 to-sky-600/5',
+          brandIcon: 'bg-gradient-to-br from-sky-500 to-sky-700 text-white shadow-sky-500/20',
+        };
+      case OnboardingPathway.MuscleGain:
+        return {
+          name: 'Muscle & Weight Gain',
+          badgeBg: 'bg-amber-50 text-amber-800 border-amber-200/80',
+          dot: 'bg-amber-500',
+          activePill: 'bg-amber-50/80 text-amber-950 border-amber-200/80 shadow-xs font-semibold',
+          activeIcon: 'text-amber-600',
+          activeBar: 'bg-amber-500',
+          glow: 'from-amber-500/20 to-amber-600/5',
+          brandIcon: 'bg-gradient-to-br from-amber-500 to-amber-700 text-white shadow-amber-500/20',
+        };
+      case OnboardingPathway.GeneralFitness:
+      default:
+        return {
+          name: 'General Nutrition',
+          badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-200/80',
+          dot: 'bg-emerald-500',
+          activePill: 'bg-emerald-50/80 text-emerald-950 border-emerald-200/80 shadow-xs font-semibold',
+          activeIcon: 'text-emerald-600',
+          activeBar: 'bg-emerald-500',
+          glow: 'from-emerald-500/20 to-emerald-600/5',
+          brandIcon: 'bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-emerald-500/20',
+        };
+    }
+  })();
+
   return (
     <>
       {/* Mobile Backdrop */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-xs lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-xs lg:hidden"
           onClick={onCloseMobile}
           aria-hidden="true"
         />
       )}
 
+      {/* Modern Scandinavian Health-Tech Sidebar */}
       <aside
         aria-label="Primary Sidebar Navigation"
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[#0B1221] text-slate-300 border-r border-slate-800/80 transition-transform duration-200 ease-out lg:static lg:translate-x-0 shrink-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-white/95 backdrop-blur-xl text-slate-700 border-r border-slate-200/70 transition-transform duration-200 ease-out lg:static lg:translate-x-0 shrink-0 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Brand Identity Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800/80">
+        {/* Brand Header */}
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <button
             type="button"
             onClick={() => handleNav(NavigationTab.Dashboard)}
-            className="flex items-center gap-3 text-left focus:outline-none group"
+            className="flex items-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded-xl group"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500/20 to-sky-600/10 border border-sky-400/30 text-sky-400 shadow-sm group-hover:border-sky-400/50 transition-all">
-              <BarChart3 className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="font-display text-lg font-bold tracking-tight text-white leading-none group-hover:text-sky-300 transition-colors">
-                ASCEND
-              </div>
-              <p className="mt-1 text-[11px] font-medium text-slate-400">
-                Getting Better Every Day
-              </p>
-            </div>
+            <AscendLogo
+              variant="full"
+              colorScheme="dark"
+              pathway={userProfile.pathway}
+              size="sm"
+            />
           </button>
 
           <button
             type="button"
             onClick={onCloseMobile}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white lg:hidden"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 lg:hidden"
             aria-label="Close navigation menu"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
+        {/* Pathway Context Banner in Sidebar */}
+        <div className="px-3 pt-3.5 pb-1">
+          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-between gap-2">
+            <div className="min-w-0 flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full shrink-0 ${pathwayTheme.dot}`} />
+              <div className="truncate">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Active Pathway</div>
+                <div className="text-xs font-bold text-slate-800 truncate">{pathwayTheme.name}</div>
+              </div>
+            </div>
+            {onSwitchPathway && (
+              <button
+                type="button"
+                onClick={onSwitchPathway}
+                className="shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-white border border-transparent hover:border-slate-200 transition-all"
+                title="Switch Pathway"
+                aria-label="Switch Pathway"
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Navigation Links */}
-        <nav className="flex-1 overflow-y-auto px-3 py-5 space-y-6">
-          {/* Primary Navigation */}
-          <div className="space-y-1">
-            {PRIMARY_NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleNav(item.id)}
-                  className={`relative w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
-                    isActive
-                      ? 'bg-sky-500/15 text-white border border-sky-500/30 font-semibold shadow-xs'
-                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100 border border-transparent'
-                  }`}
-                >
-                  {isActive && (
-                    <span className="absolute left-1.5 top-2.5 bottom-2.5 w-1 rounded-full bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
-                  )}
-                  <Icon
-                    className={`h-4 w-4 shrink-0 transition-transform ${
-                      isActive ? 'text-sky-400 scale-105' : 'text-slate-400'
+        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-5">
+          {/* Primary Nav */}
+          <div>
+            <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+              Workspace
+            </div>
+            <div className="space-y-0.5">
+              {PRIMARY_NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleNav(item.id)}
+                    className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all text-left ${
+                      isActive
+                        ? pathwayTheme.activePill
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                     }`}
-                  />
-                  <span className="truncate">{item.label}</span>
-                </button>
-              );
-            })}
+                  >
+                    {isActive && (
+                      <span className={`absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full ${pathwayTheme.activeBar}`} />
+                    )}
+                    <Icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? pathwayTheme.activeIcon : 'text-slate-600'}`} />
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Secondary Section: Planning & Exports */}
-          <div className="pt-4 border-t border-slate-800/80 space-y-1">
-            <p className="px-3.5 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Schedule & History
-            </p>
-            {SECONDARY_NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleNav(item.id)}
-                  className={`relative w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
-                    isActive
-                      ? 'bg-sky-500/15 text-white border border-sky-500/30 font-semibold shadow-xs'
-                      : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-100 border border-transparent'
-                  }`}
-                >
-                  {isActive && (
-                    <span className="absolute left-1.5 top-2 bottom-2 w-1 rounded-full bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
-                  )}
-                  <Icon
-                    className={`h-4 w-4 shrink-0 transition-transform ${
-                      isActive ? 'text-sky-400 scale-105' : 'text-slate-400'
+          {/* Secondary Nav */}
+          <div>
+            <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+              Tools & Data
+            </div>
+            <div className="space-y-0.5">
+              {SECONDARY_NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleNav(item.id)}
+                    className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all text-left ${
+                      isActive
+                        ? pathwayTheme.activePill
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                     }`}
-                  />
-                  <span className="truncate">{item.label}</span>
-                </button>
-              );
-            })}
+                  >
+                    {isActive && (
+                      <span className={`absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full ${pathwayTheme.activeBar}`} />
+                    )}
+                    <Icon className={`h-4 w-4 shrink-0 transition-colors ${isActive ? pathwayTheme.activeIcon : 'text-slate-600'}`} />
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </nav>
 
-        {/* User Profile & Account Area at Bottom */}
-        <div className="p-3.5 border-t border-slate-800/80 bg-[#080E1A]/90 space-y-2">
+        {/* Footer: User profile & Settings */}
+        <div className="p-3 border-t border-slate-100 space-y-1.5">
           <button
             type="button"
             onClick={() => handleNav(NavigationTab.Settings)}
-            className={`w-full flex items-center gap-3 rounded-xl p-2.5 text-left transition-all border ${
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all text-left ${
               activeTab === NavigationTab.Settings
-                ? 'bg-slate-800 text-white border-slate-700 shadow-xs'
-                : 'border-transparent hover:bg-slate-800/60 text-slate-300'
+                ? pathwayTheme.activePill
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
             }`}
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500/25 to-blue-600/15 border border-sky-400/30 text-sky-300">
-              <UserCheck className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-white truncate">
-                {userAccount.name || 'Personal Account'}
-              </p>
-              <p className="text-xs text-sky-400/80 font-medium truncate">
-                {userProfile.pathway}
-              </p>
-            </div>
-            <Settings className="h-4 w-4 text-slate-500 hover:text-slate-300 shrink-0 transition-colors" />
+            <Settings className="h-4 w-4 text-slate-600" />
+            <span>Settings</span>
           </button>
 
-          <button
-            type="button"
-            onClick={onSignOut}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-rose-300 hover:bg-rose-950/20 border border-transparent hover:border-rose-900/40 transition-all"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            <span>Sign Out / Switch Profile</span>
-          </button>
+          <div className="p-2 rounded-xl bg-slate-50/80 border border-slate-100 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="h-7 w-7 rounded-lg bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center shrink-0">
+                {userAccount?.name ? userAccount.name.charAt(0).toUpperCase() : 'U'}
+              </div>
+              <div className="truncate">
+                <div className="text-xs font-semibold text-slate-800 truncate">
+                  {userAccount?.name || 'User'}
+                </div>
+                <div className="text-[10px] text-slate-600 truncate">
+                  {userProfile.currentWeightKg}kg · {userProfile.goalType}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+              title="Sign Out"
+              aria-label="Sign Out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </aside>
 
-      {/* Mobile Bottom Navigation Bar */}
+      {/* Mobile Bottom Navigation (clean, luminous, frosted) */}
       <nav
-        aria-label="Mobile Primary Navigation"
-        className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 px-2 py-1.5 flex items-center justify-around lg:hidden"
+        aria-label="Mobile Bottom Navigation"
+        className="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 flex items-center justify-around py-2 px-1 lg:hidden shadow-lg pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       >
-        {[
-          PRIMARY_NAV_ITEMS[0], // Overview
-          PRIMARY_NAV_ITEMS[1], // Diet
-          PRIMARY_NAV_ITEMS[2], // Workouts
-          PRIMARY_NAV_ITEMS[3], // Progress
-          PRIMARY_NAV_ITEMS[5], // AI Coach
-        ].map((item) => {
+        {PRIMARY_NAV_ITEMS.slice(0, 5).map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           return (
             <button
               key={item.id}
               type="button"
-              onClick={() => onSelectTab(item.id)}
-              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-lg text-[11px] font-medium transition-colors ${
-                isActive ? 'text-sky-600' : 'text-slate-500 hover:text-slate-900'
+              onClick={() => handleNav(item.id)}
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors ${
+                isActive ? 'text-slate-900 font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Icon className="h-4 w-4 mb-0.5" />
+              <Icon className={`h-4 w-4 ${isActive ? pathwayTheme.activeIcon : 'text-slate-600'}`} />
               <span>{item.label}</span>
             </button>
           );

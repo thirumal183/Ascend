@@ -21,6 +21,12 @@ import {
   ProgressRecord,
   UserProfile,
 } from '../../types/ascend';
+import { getDateWithOffset, getLocalDateIso } from '../../utils/dateUtils';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
+import { SectionHeader } from '../ui/SectionHeader';
+import { Modal } from '../ui/Modal';
 
 interface ProgressTrackingViewProps {
   progressHistory: ProgressRecord[];
@@ -66,8 +72,11 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
     return r.source === sourceFilter;
   });
 
+  const fourWeeksCutoffIso = getDateWithOffset(-28).dateIso;
   const displayedRecords =
-    dateRange === '4w' ? filteredBySource.slice(-4) : filteredBySource;
+    dateRange === '4w'
+      ? filteredBySource.filter((r) => r.dateIso >= fourWeeksCutoffIso)
+      : filteredBySource;
 
   const weightChange =
     latest && first ? (latest.weightKg - first.weightKg).toFixed(1) : '0.0';
@@ -83,7 +92,7 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
     const chest = parseFloat(chestInput) || 102.5;
     const leanMass = Math.round(w * (1 - bf / 100) * 10) / 10;
 
-    const todayDateIso = new Date().toISOString().split('T')[0];
+    const todayDateIso = getLocalDateIso();
     const todayLabel = `Logged (${new Date().toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -119,25 +128,21 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
   return (
     <div className="animate-page-enter space-y-8 pb-20 lg:pb-12">
       {/* Header & Log Progress Action */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-slate-900">
-            Progress & Body Measurements
-          </h1>
-          <p className="text-sm text-slate-600 mt-0.5">
-            Track your weight trend, key body measurements, and weekly consistency.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowLogModal(!showLogModal)}
-          className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-xl transition-colors self-start sm:self-auto shadow-2xs"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Log Progress</span>
-        </button>
-      </div>
+      <SectionHeader
+        title="Progress & Body Measurements"
+        subtitle="Track your weight trend, key body measurements, and weekly consistency."
+        badge={<Badge variant="sky" size="sm">Biometrics</Badge>}
+        action={
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => setShowLogModal(!showLogModal)}
+            leftIcon={<Plus className="h-4 w-4" />}
+          >
+            <span>Log Check-In</span>
+          </Button>
+        }
+      />
 
       {savedNotice && (
         <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm font-medium flex items-center justify-between">
@@ -148,113 +153,106 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
           <button
             type="button"
             onClick={() => setSavedNotice(null)}
-            className="text-emerald-700"
+            className="text-emerald-700 hover:text-emerald-950 p-1"
+            aria-label="Dismiss notification"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
-      {/* Collapsible Log Progress Form */}
-      {showLogModal && (
-        <section className="bg-white border border-sky-200 rounded-2xl p-6 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+      {/* Checkpoint Log Modal */}
+      <Modal
+        isOpen={showLogModal}
+        onClose={() => setShowLogModal(false)}
+        title="Log New Progress Check-In"
+        subtitle="Saved entries are labeled as your personal user-logged records."
+        maxWidth="2xl"
+      >
+        <form onSubmit={handleLogSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
-              <h2 className="font-display text-base font-bold text-slate-900">
-                Log New Progress Check-In
-              </h2>
-              <p className="text-xs text-slate-500">
-                Saved entries are labeled as your personal user-logged records.
-              </p>
+              <label htmlFor="prog-weight-input" className="block text-xs font-semibold text-slate-700 mb-1">
+                Current Weight (kg)
+              </label>
+              <input
+                id="prog-weight-input"
+                type="number"
+                step="0.1"
+                required
+                value={weightInput}
+                onChange={(e) => setWeightInput(e.target.value)}
+                className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500"
+              />
             </div>
-            <button
-              type="button"
-              onClick={() => setShowLogModal(false)}
-              className="text-slate-400 hover:text-slate-600"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <div>
+              <label htmlFor="prog-waist-input" className="block text-xs font-semibold text-slate-700 mb-1">
+                Waist (cm, optional)
+              </label>
+              <input
+                id="prog-waist-input"
+                type="number"
+                step="0.1"
+                value={waistInput}
+                onChange={(e) => setWaistInput(e.target.value)}
+                className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="prog-bodyfat-input" className="block text-xs font-semibold text-slate-700 mb-1">
+                Body Fat (%, optional)
+              </label>
+              <input
+                id="prog-bodyfat-input"
+                type="number"
+                step="0.1"
+                value={bodyFatInput}
+                onChange={(e) => setBodyFatInput(e.target.value)}
+                className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="prog-chest-input" className="block text-xs font-semibold text-slate-700 mb-1">
+                Chest (cm, optional)
+              </label>
+              <input
+                id="prog-chest-input"
+                type="number"
+                step="0.1"
+                value={chestInput}
+                onChange={(e) => setChestInput(e.target.value)}
+                className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500"
+              />
+            </div>
           </div>
 
-          <form onSubmit={handleLogSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Current Weight (kg)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  required
-                  value={weightInput}
-                  onChange={(e) => setWeightInput(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Waist (cm, optional)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={waistInput}
-                  onChange={(e) => setWaistInput(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Body Fat (%, optional)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={bodyFatInput}
-                  onChange={(e) => setBodyFatInput(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Chest (cm, optional)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={chestInput}
-                  onChange={(e) => setChestInput(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowLogModal(false)}
-                className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-xl"
-              >
-                Save Check-In
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowLogModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+            >
+              Save Check-In
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Top Summary Cards: Current Weight, Target Weight, Key Measurements & Weekly Summary */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="ascend-card-v2 p-5">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
             Current Weight
           </span>
-          <div className="mt-1 font-mono text-2xl font-bold text-slate-900 tabular-nums">
+          <div className="mt-1 font-mono text-3xl font-black text-slate-900 tabular-nums">
             {latest?.weightKg ?? userProfile.currentWeightKg} <span className="text-sm font-normal text-slate-500">kg</span>
           </div>
           <p className="mt-1 text-xs text-slate-500 font-mono">
@@ -262,11 +260,11 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="ascend-card-v2 p-5">
           <span className="text-xs font-semibold text-sky-700 uppercase tracking-wider block">
             Target Weight
           </span>
-          <div className="mt-1 font-mono text-2xl font-bold text-sky-800 tabular-nums">
+          <div className="mt-1 font-mono text-3xl font-black text-sky-800 tabular-nums">
             {userProfile.targetWeightKg} <span className="text-sm font-normal text-sky-600">kg</span>
           </div>
           <p className="mt-1 text-xs text-slate-500 truncate">
@@ -274,11 +272,11 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="ascend-card-v2 p-5">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
             Key Measurements
           </span>
-          <div className="mt-1 font-mono text-lg font-bold text-slate-900 tabular-nums">
+          <div className="mt-1 font-mono text-xl font-bold text-slate-900 tabular-nums">
             Waist: {latest?.waistCm ?? '—'} cm
           </div>
           <p className="mt-1 text-xs text-slate-500 font-mono truncate">
@@ -286,11 +284,11 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
           </p>
         </div>
 
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition-shadow">
+        <div className="ascend-card-v2 p-5">
           <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider block">
             Weekly Adherence
           </span>
-          <div className="mt-1 font-mono text-lg font-bold text-emerald-800 tabular-nums">
+          <div className="mt-1 font-mono text-xl font-bold text-emerald-800 tabular-nums">
             {goals.weeklyWorkoutSessions} sessions / wk
           </div>
           <p className="mt-1 text-xs text-slate-500 font-mono">
@@ -300,7 +298,7 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
       </section>
 
       {/* Main Weight Trend Chart */}
-      <section className="bg-white border border-slate-200/80 rounded-2xl p-6 space-y-5">
+      <section className="ascend-card-v2 p-6 space-y-5">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
           <div>
             <div className="flex items-center gap-2 text-xs font-semibold text-sky-600">

@@ -1,17 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  ArrowRightLeft,
   Check,
   ChevronDown,
   ChevronUp,
   Coffee,
   Edit3,
+  Eye,
   Flame,
   Info,
   Loader2,
   Moon,
   Plus,
   RotateCcw,
+  Scale,
   Search,
   Sparkles,
   Sun,
@@ -25,6 +28,7 @@ import {
   computeDailyTotals,
   filterFoodCatalog,
 } from '../../services/ascendApiService';
+import { getLocalDateIso } from '../../utils/dateUtils';
 import {
   FoodCategory,
   FoodItem,
@@ -33,6 +37,19 @@ import {
   NutritionGoals,
   ServingUnit,
 } from '../../types/ascend';
+import {
+  formatCalories,
+  formatGrams,
+  formatMg,
+  formatNumber,
+} from '../../utils/formatters';
+import { FoodDetailsModal } from './FoodDetailsModal';
+import { FoodComparisonModal } from './FoodComparisonModal';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
+import { ProgressBar } from '../ui/ProgressBar';
+import { EmptyState } from '../ui/EmptyState';
 
 interface DietManagementViewProps {
   foodCatalog: FoodItem[];
@@ -52,6 +69,8 @@ interface DietManagementViewProps {
 const FOOD_CATEGORIES: FoodCategory[] = [
   'All',
   'Protein Sources',
+  'Indian Breads & Roti',
+  'Dals, Pulses & Curries',
   'Grains & Oats',
   'Produce',
   'Dairy & Alternatives',
@@ -110,6 +129,34 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
   const [editUnit, setEditUnit] = useState<ServingUnit>('g');
   const [editMeal, setEditMeal] = useState<MealType>(MealType.Breakfast);
 
+  // Nutrition Intelligence Modal States
+  const [modalFood, setModalFood] = useState<FoodItem | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [comparisonFoodIds, setComparisonFoodIds] = useState<string[]>([
+    'food-chicken-breast',
+    'food-paneer',
+    'food-toor-dal',
+  ]);
+  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
+
+  const handleOpenDetails = (food: FoodItem) => {
+    setModalFood(food);
+    setIsDetailsOpen(true);
+  };
+
+  const handleToggleCompare = (foodId: string) => {
+    setComparisonFoodIds((prev) => {
+      if (prev.includes(foodId)) {
+        return prev.filter((id) => id !== foodId);
+      }
+      if (prev.length >= 3) {
+        // Replace oldest or keep max 3
+        return [...prev.slice(1), foodId];
+      }
+      return [...prev, foodId];
+    });
+  };
+
   useEffect(() => {
     if (initialMeal) {
       setSelectedMeal(initialMeal);
@@ -139,19 +186,28 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
     }
   };
 
-  const filteredFoods = filterFoodCatalog(
-    foodCatalog,
-    searchQuery,
-    selectedCategory
+  const filteredFoods = useMemo(
+    () => filterFoodCatalog(foodCatalog, searchQuery, selectedCategory),
+    [foodCatalog, searchQuery, selectedCategory]
   );
 
-  const previewNutrients = calculateScaledNutrients(
-    selectedFood,
-    quantity,
-    unit
+  const previewNutrients = useMemo(
+    () => calculateScaledNutrients(selectedFood, quantity, unit),
+    [selectedFood, quantity, unit]
   );
 
-  const dailyTotals = computeDailyTotals(intakeRecords);
+  const todayIso = useMemo(() => getLocalDateIso(), []);
+
+  // Filter intake records strictly for today's active diary
+  const todayIntakeRecords = useMemo(
+    () => intakeRecords.filter((r) => (r.dateIso ? r.dateIso === todayIso : true)),
+    [intakeRecords, todayIso]
+  );
+
+  const dailyTotals = useMemo(
+    () => computeDailyTotals(todayIntakeRecords),
+    [todayIntakeRecords]
+  );
 
   const handleConfirmAddFood = (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,7 +226,7 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
       quantity,
       unit,
       loggedAt: nowTime,
-      dateIso: '2026-10-27',
+      dateIso: getLocalDateIso(),
       computedNutrients: previewNutrients,
       isUserLogged: true,
     });
@@ -253,17 +309,17 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
   return (
     <div className="space-y-8 pb-20 lg:pb-12 animate-page-enter">
       {/* Compact Daily Summary Bar */}
-      <section className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs space-y-4">
+      <Card variant="elevated" className="p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-display text-xl sm:text-2xl font-bold text-slate-900">
                 Log Meals & Track Nutrition
               </h1>
-              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+              <Badge variant="sky" size="sm" className="hidden sm:inline-flex gap-1">
                 <Sparkles className="h-3 w-3 text-sky-500" />
-                Live Tracker
-              </span>
+                <span>Live Tracker</span>
+              </Badge>
             </div>
             <p className="text-sm text-slate-500 mt-1">
               Search the verified catalogue, adjust portions with live macros, and log to your daily diary.
@@ -275,7 +331,7 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
             <span className="font-mono text-base font-bold text-slate-900 tabular-nums">
               {dailyTotals.calories.toLocaleString()}
             </span>
-            <span className="text-xs text-slate-400 font-mono">
+            <span className="text-xs text-slate-500 font-mono">
               / {goals.dailyCalories.toLocaleString()} kcal ({calPct}%)
             </span>
           </div>
@@ -288,14 +344,9 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
               <span className="font-semibold text-slate-600">Calories</span>
               <span className="font-mono text-slate-900 font-bold">{calPct}%</span>
             </div>
-            <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-sky-500 to-blue-600 rounded-full transition-all duration-500"
-                style={{ width: `${calPct}%` }}
-              />
-            </div>
+            <ProgressBar value={calPct} color="bg-sky-600" height="xs" />
             <p className="text-[11px] text-slate-500 font-mono">
-              {dailyTotals.calories} / {goals.dailyCalories} kcal
+              {formatCalories(dailyTotals.calories)} / {formatCalories(goals.dailyCalories)} kcal
             </p>
           </div>
 
@@ -304,14 +355,9 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
               <span className="font-semibold text-sky-800">Protein</span>
               <span className="font-mono text-sky-900 font-bold">{proteinPct}%</span>
             </div>
-            <div className="h-1.5 w-full bg-sky-200/80 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-sky-600 rounded-full transition-all duration-500"
-                style={{ width: `${proteinPct}%` }}
-              />
-            </div>
+            <ProgressBar value={proteinPct} color="bg-sky-600" height="xs" />
             <p className="text-[11px] text-sky-700 font-mono">
-              {dailyTotals.proteinG}g / {goals.proteinG}g
+              {formatGrams(dailyTotals.proteinG)} / {formatGrams(goals.proteinG)}
             </p>
           </div>
 
@@ -320,14 +366,9 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
               <span className="font-semibold text-emerald-800">Carbs</span>
               <span className="font-mono text-emerald-900 font-bold">{carbsPct}%</span>
             </div>
-            <div className="h-1.5 w-full bg-emerald-200/80 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-emerald-600 rounded-full transition-all duration-500"
-                style={{ width: `${carbsPct}%` }}
-              />
-            </div>
+            <ProgressBar value={carbsPct} color="bg-emerald-600" height="xs" />
             <p className="text-[11px] text-emerald-700 font-mono">
-              {dailyTotals.carbsG}g / {goals.carbsG}g
+              {formatGrams(dailyTotals.carbsG)} / {formatGrams(goals.carbsG)}
             </p>
           </div>
 
@@ -336,18 +377,28 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
               <span className="font-semibold text-amber-800">Fat</span>
               <span className="font-mono text-amber-900 font-bold">{fatPct}%</span>
             </div>
-            <div className="h-1.5 w-full bg-amber-200/80 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-amber-600 rounded-full transition-all duration-500"
-                style={{ width: `${fatPct}%` }}
-              />
-            </div>
+            <ProgressBar value={fatPct} color="bg-amber-600" height="xs" />
             <p className="text-[11px] text-amber-700 font-mono">
-              {dailyTotals.fatG}g / {goals.fatG}g
+              {formatGrams(dailyTotals.fatG)} / {formatGrams(goals.fatG)}
             </p>
           </div>
         </div>
-      </section>
+
+        {/* Micronutrient Data Completeness Indicator */}
+        <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500 border-t border-slate-100">
+          <div className="flex items-center gap-1.5">
+            <Info className="h-3.5 w-3.5 text-sky-600 shrink-0" />
+            <span>
+              {dailyTotals.incompleteCount === 0
+                ? 'All logged items have full micronutrient lab specs.'
+                : `${dailyTotals.incompleteCount} logged item(s) have unmeasured trace mineral values (represented as null).`}
+            </span>
+          </div>
+          <span className="font-semibold text-slate-700 shrink-0">
+            {dailyTotals.incompleteCount === 0 ? '100% Complete' : `${Math.max(60, 100 - dailyTotals.incompleteCount * 10)}% Spec Coverage`}
+          </span>
+        </div>
+      </Card>
 
       {/* Confirmation Banner with Undo Action */}
       {addedFeedback && (
@@ -410,61 +461,74 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
         {/* LEFT: Step 1 & 2 — Search & Select Food */}
         <section
           aria-label="Search and Select Food"
-          className="lg:col-span-7 bg-white border border-slate-200/80 rounded-2xl p-6 space-y-5"
+          className="lg:col-span-7 ascend-card-v2 p-6 space-y-5"
         >
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h2 className="font-display text-lg font-bold text-slate-900">
                 1. Find a Food
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Sample reference catalogue ({filteredFoods.length} items shown)
+                Authentic Indian & global reference catalogue ({filteredFoods.length} items shown)
               </p>
             </div>
 
-            {/* Subtle State Tester for Demo Review */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setCatalogState('normal')}
-                className={`px-2 py-1 rounded font-medium transition-colors ${
-                  catalogState === 'normal'
-                    ? 'bg-white text-slate-900 shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
+                onClick={() => setIsComparisonOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 rounded-xl transition-all shadow-2xs"
               >
-                Normal
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+                <span>Compare ({comparisonFoodIds.length})</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setCatalogState('loading')}
-                className={`px-2 py-1 rounded font-medium transition-colors ${
-                  catalogState === 'loading'
-                    ? 'bg-white text-slate-900 shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Loading
-              </button>
-              <button
-                type="button"
-                onClick={() => setCatalogState('error')}
-                className={`px-2 py-1 rounded font-medium transition-colors ${
-                  catalogState === 'error'
-                    ? 'bg-white text-slate-900 shadow-2xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Error
-              </button>
+
+              {/* Subtle State Tester for Demo Review */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs">
+                <button
+                  type="button"
+                  onClick={() => setCatalogState('normal')}
+                  className={`px-2 py-1 rounded font-medium transition-colors ${
+                    catalogState === 'normal'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Normal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogState('loading')}
+                  className={`px-2 py-1 rounded font-medium transition-colors ${
+                    catalogState === 'loading'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Loading
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogState('error')}
+                  className={`px-2 py-1 rounded font-medium transition-colors ${
+                    catalogState === 'error'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Error
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Search Input */}
           <div className="relative">
-            <Search className="h-4 w-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="h-4 w-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
+              id="food-search-input"
+              aria-label="Search food database"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search food by name (e.g., salmon, chicken, oats, yogurt)..."
@@ -483,12 +547,13 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
           </div>
 
           {/* Category Filter Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1" role="group" aria-label="Filter food by category">
             {FOOD_CATEGORIES.map((cat) => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setSelectedCategory(cat)}
+                aria-pressed={selectedCategory === cat}
                 className={`px-3 py-1.5 text-xs font-medium rounded-xl transition-colors whitespace-nowrap shrink-0 ${
                   selectedCategory === cat
                     ? 'bg-sky-600 text-white'
@@ -529,60 +594,110 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
                 </button>
               </div>
             ) : filteredFoods.length === 0 ? (
-              <div className="py-10 px-4 text-center rounded-xl border border-dashed border-slate-200 space-y-3">
-                <Utensils className="h-6 w-6 text-slate-400 mx-auto" />
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-slate-900">
-                    No matching foods found
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Try another search term or clear the category filter.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedCategory('All');
-                  }}
-                  className="px-3.5 py-1.5 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-xl transition-colors"
-                >
-                  Show All Foods
-                </button>
-              </div>
+              <EmptyState
+                icon={Utensils}
+                title="No matching foods found"
+                description="Try another search term or clear the category filter."
+                actionLabel="Show All Foods"
+                onAction={() => {
+                  setSearchQuery('');
+                  setSelectedCategory('All');
+                }}
+              />
             ) : (
               <div className="divide-y divide-slate-100">
                 {filteredFoods.map((food) => {
                   const isSelected = selectedFood.id === food.id;
+                  const isCompared = comparisonFoodIds.includes(food.id);
+                  const prepLabel =
+                    food.preparationState === 'raw'
+                      ? 'Raw'
+                      : food.preparationState === 'composite_dish'
+                        ? 'Recipe'
+                        : food.preparationState === 'packaged'
+                          ? 'Packaged'
+                          : 'Cooked';
+
                   return (
-                    <button
+                    <div
                       key={food.id}
-                      type="button"
-                      onClick={() => handleSelectFood(food)}
-                      className={`w-full py-3.5 px-3.5 text-left flex items-center justify-between gap-4 rounded-xl transition-all ${
+                      className={`w-full py-3 px-3.5 flex items-center justify-between gap-3 rounded-2xl transition-all ${
                         isSelected
-                          ? 'bg-sky-50/80 border border-sky-200'
-                          : 'hover:bg-slate-50 border border-transparent'
+                          ? 'bg-sky-50/90 border border-sky-300 shadow-2xs'
+                          : 'hover:bg-slate-50/90 border border-transparent'
                       }`}
                     >
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 truncate">
-                          {food.name}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {food.category} · Per {food.referenceLabel}
-                        </p>
+                      {/* Clickable Area to Select Food for Portion Builder */}
+                      <button
+                        type="button"
+                        onClick={() => handleSelectFood(food)}
+                        className="flex-1 text-left min-w-0 flex items-center justify-between gap-3 cursor-pointer group"
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-sm font-semibold text-slate-900 group-hover:text-sky-700 transition-colors truncate">
+                              {food.name}
+                            </p>
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                              {prepLabel}
+                            </span>
+                            {food.cuisineRegion && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700">
+                                {food.cuisineRegion}
+                              </span>
+                            )}
+                          </div>
+                          {food.alternateNames && food.alternateNames.length > 0 && (
+                            <p className="text-[11px] text-slate-400 truncate">
+                              {food.alternateNames.slice(0, 3).join(' · ')}
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-500">
+                            {food.category} · Per {food.referenceLabel}
+                          </p>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="font-mono text-sm font-bold text-slate-900 block">
+                            {formatCalories(food.nutrients.calories)} kcal
+                          </span>
+                          <span className="text-xs text-slate-500 font-mono">
+                            P {formatGrams(food.nutrients.proteinG)} · C {formatGrams(food.nutrients.carbsG)} · F{' '}
+                            {formatGrams(food.nutrients.fatG)}
+                          </span>
+                        </div>
+                      </button>
+
+                      {/* Quick Action Buttons: Details Modal & Compare Toggle */}
+                      <div className="flex items-center gap-1 shrink-0 pl-2 border-l border-slate-200/60">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDetails(food)}
+                          className="p-1.5 text-slate-400 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors"
+                          title="View full nutrient laboratory specs & provenance"
+                          aria-label={`View details for ${food.name}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCompare(food.id)}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            isCompared
+                              ? 'text-sky-700 bg-sky-100'
+                              : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                          }`}
+                          title={
+                            isCompared
+                              ? 'Remove from comparison'
+                              : 'Add to side-by-side comparison'
+                          }
+                          aria-label={`Compare ${food.name}`}
+                        >
+                          <ArrowRightLeft className="h-4 w-4" />
+                        </button>
                       </div>
-                      <div className="text-right shrink-0">
-                        <span className="font-mono text-sm font-bold text-slate-900 block">
-                          {food.nutrients.calories} kcal
-                        </span>
-                        <span className="text-xs text-slate-500 font-mono">
-                          P {food.nutrients.proteinG}g · C{' '}
-                          {food.nutrients.carbsG}g · F {food.nutrients.fatG}g
-                        </span>
-                      </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -593,19 +708,29 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
         {/* RIGHT: Steps 3–6 — Quantity, Meal Selection, Prominent Macros & Expandable Details */}
         <section
           aria-label="Configure Portion and Add Food"
-          className="lg:col-span-5 bg-white border border-slate-200/80 rounded-2xl p-6 space-y-5"
+          className="lg:col-span-5 ascend-card-v2 p-6 space-y-5"
         >
-          <div className="pb-4 border-b border-slate-100">
-            <span className="text-xs font-semibold text-sky-600">
-              2. Customize Portion & Meal
-            </span>
-            <h2 className="mt-1 font-display text-lg font-bold text-slate-900">
-              {selectedFood.name}
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Reference serving: {selectedFood.referenceLabel} (
-              {selectedFood.brandOrSource})
-            </p>
+          <div className="pb-4 border-b border-slate-100 flex items-start justify-between gap-3">
+            <div>
+              <span className="text-xs font-semibold text-sky-600">
+                2. Customize Portion & Meal
+              </span>
+              <h2 className="mt-1 font-display text-lg font-bold text-slate-900">
+                {selectedFood.name}
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Reference serving: {selectedFood.referenceLabel} (
+                {selectedFood.brandOrSource})
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleOpenDetails(selectedFood)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-xl transition-colors shrink-0 border border-sky-100"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              <span>Full Specs</span>
+            </button>
           </div>
 
           <form onSubmit={handleConfirmAddFood} className="space-y-5">
@@ -684,12 +809,13 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
               <label className="block text-xs font-semibold text-slate-700 mb-2">
                 Select Meal
               </label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 gap-2" role="group" aria-label="Select meal to log into">
                 {Object.values(MealType).map((m) => (
                   <button
                     key={m}
                     type="button"
                     onClick={() => setSelectedMeal(m)}
+                    aria-pressed={selectedMeal === m}
                     className={`py-2 px-2 text-xs font-semibold rounded-xl border transition-all ${
                       selectedMeal === m
                         ? 'bg-slate-900 text-white border-slate-900'
@@ -709,7 +835,7 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
                   Calculated Nutrition ({quantity} {unit})
                 </span>
                 <span className="font-mono text-xl font-bold text-slate-900 tabular-nums">
-                  {previewNutrients.calories} kcal
+                  {formatCalories(previewNutrients.calories)} kcal
                 </span>
               </div>
 
@@ -719,7 +845,7 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
                     Protein
                   </span>
                   <strong className="font-mono text-sm font-bold text-sky-700 tabular-nums">
-                    {previewNutrients.proteinG}g
+                    {formatGrams(previewNutrients.proteinG)}
                   </strong>
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-slate-200/60">
@@ -727,13 +853,13 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
                     Carbs
                   </span>
                   <strong className="font-mono text-sm font-bold text-emerald-700 tabular-nums">
-                    {previewNutrients.carbsG}g
+                    {formatGrams(previewNutrients.carbsG)}
                   </strong>
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-slate-200/60">
                   <span className="text-[11px] text-slate-500 block">Fat</span>
                   <strong className="font-mono text-sm font-bold text-amber-700 tabular-nums">
-                    {previewNutrients.fatG}g
+                    {formatGrams(previewNutrients.fatG)}
                   </strong>
                 </div>
               </div>
@@ -763,32 +889,32 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
                       <span>Dietary Fibre</span>
                       <span className="font-mono">
                         {previewNutrients.fiberG != null
-                          ? `${previewNutrients.fiberG} g`
-                          : 'Not reported'}
+                          ? formatGrams(previewNutrients.fiberG)
+                          : '— (Unmeasured)'}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Sugars</span>
                       <span className="font-mono">
                         {previewNutrients.sugarG != null
-                          ? `${previewNutrients.sugarG} g`
-                          : 'Not reported'}
+                          ? formatGrams(previewNutrients.sugarG)
+                          : '— (Unmeasured)'}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Sodium</span>
                       <span className="font-mono">
                         {previewNutrients.sodiumMg != null
-                          ? `${previewNutrients.sodiumMg} mg`
-                          : 'Not reported'}
+                          ? formatMg(previewNutrients.sodiumMg)
+                          : '— (Unmeasured)'}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Potassium</span>
                       <span className="font-mono">
                         {previewNutrients.potassiumMg != null
-                          ? `${previewNutrients.potassiumMg} mg`
-                          : 'Not reported'}
+                          ? formatMg(previewNutrients.potassiumMg)
+                          : '— (Unmeasured)'}
                       </span>
                     </div>
                     <div className="pt-2 flex items-start gap-2 text-[11px] text-slate-500">
@@ -819,31 +945,31 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
       {/* Daily Intake List with Edit & Delete */}
       <section
         aria-label="Daily Logged Foods"
-        className="bg-white border border-slate-200/80 rounded-2xl p-6 space-y-5"
+        className="ascend-card-v2 p-6 space-y-5"
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
           <div>
             <h2 className="font-display text-lg font-bold text-slate-900">
-              Today’s Logged Foods ({intakeRecords.length})
+              Today’s Logged Foods ({todayIntakeRecords.length})
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               Categorized by meal · Update portions or remove items at any time
             </p>
           </div>
           <span className="font-mono text-xs text-slate-600">
-            Total: <strong>{dailyTotals.calories.toLocaleString()} kcal</strong> ·{' '}
-            <span className="text-sky-700 font-semibold">{dailyTotals.proteinG}g Protein</span>
+            Total: <strong>{formatCalories(dailyTotals.calories)} kcal</strong> ·{' '}
+            <span className="text-sky-700 font-semibold">{formatGrams(dailyTotals.proteinG)} Protein</span>
           </span>
         </div>
 
-        {intakeRecords.length === 0 ? (
+        {todayIntakeRecords.length === 0 ? (
           <div className="py-8 text-center text-sm text-slate-500">
             No foods logged yet today. Select a food above to add your first item.
           </div>
         ) : (
           <div className="space-y-6">
             {Object.values(MealType).map((mealType) => {
-              const mealRecords = intakeRecords.filter((r) => r.meal === mealType);
+              const mealRecords = todayIntakeRecords.filter((r) => r.meal === mealType);
               const mealCalories = mealRecords.reduce(
                 (sum, item) => sum + item.computedNutrients.calories,
                 0
@@ -870,8 +996,8 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
                           {mealType}
                         </h3>
                         <p className="text-[11px] text-slate-500 font-mono mt-1">
-                          {mealCalories} kcal
-                          {mealProtein > 0 && ` · ${mealProtein}g protein`}
+                          {formatCalories(mealCalories)} kcal
+                          {mealProtein > 0 && ` · ${formatGrams(mealProtein)} protein`}
                         </p>
                       </div>
                     </div>
@@ -908,9 +1034,9 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
                               {!isEditing && (
                                 <p className="text-xs text-slate-500 font-mono mt-0.5">
                                   {rec.quantity} {rec.unit} · P{' '}
-                                  {rec.computedNutrients.proteinG}g · C{' '}
-                                  {rec.computedNutrients.carbsG}g · F{' '}
-                                  {rec.computedNutrients.fatG}g ·{' '}
+                                  {formatGrams(rec.computedNutrients.proteinG)} · C{' '}
+                                  {formatGrams(rec.computedNutrients.carbsG)} · F{' '}
+                                  {formatGrams(rec.computedNutrients.fatG)} ·{' '}
                                   <span className="font-sans text-[11px] font-medium text-slate-400">
                                     {rec.isUserLogged ? 'Logged' : 'Sample'}
                                   </span>
@@ -925,17 +1051,19 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
                                   min="0.1"
                                   step="any"
                                   value={editQty}
+                                  aria-label="Edit quantity"
                                   onChange={(e) =>
                                     setEditQty(parseFloat(e.target.value) || 0)
                                   }
-                                  className="w-20 px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-lg"
+                                  className="w-20 px-2.5 py-1.5 text-xs font-mono border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
                                 />
                                 <select
                                   value={editUnit}
+                                  aria-label="Edit serving unit"
                                   onChange={(e) =>
                                     setEditUnit(e.target.value as ServingUnit)
                                   }
-                                  className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
+                                  className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
                                 >
                                   <option value="g">g</option>
                                   <option value="serving">serving</option>
@@ -945,10 +1073,11 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
                                 </select>
                                 <select
                                   value={editMeal}
+                                  aria-label="Edit meal category"
                                   onChange={(e) =>
                                     setEditMeal(e.target.value as MealType)
                                   }
-                                  className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
+                                  className="px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
                                 >
                                   {Object.values(MealType).map((m) => (
                                     <option key={m} value={m}>
@@ -1007,6 +1136,24 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
           </div>
         )}
       </section>
+
+      {/* Food Details Modal */}
+      <FoodDetailsModal
+        food={modalFood}
+        isOpen={isDetailsOpen}
+        onClose={() => setIsDetailsOpen(false)}
+        onSelectForLog={(food) => handleSelectFood(food)}
+      />
+
+      {/* Food Comparison Modal */}
+      <FoodComparisonModal
+        allFoods={foodCatalog}
+        selectedFoodIds={comparisonFoodIds}
+        isOpen={isComparisonOpen}
+        onClose={() => setIsComparisonOpen(false)}
+        onRemoveFood={(id) => handleToggleCompare(id)}
+        onAddFoodToCompare={(id) => handleToggleCompare(id)}
+      />
     </div>
   );
 };

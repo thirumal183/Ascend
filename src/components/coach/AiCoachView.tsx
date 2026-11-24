@@ -21,6 +21,9 @@ import {
   ProgressRecord,
   UserProfile,
 } from '../../types/ascend';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { Badge } from '../ui/Badge';
 
 interface AiCoachViewProps {
   messages: ChatMessage[];
@@ -137,9 +140,18 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
       </div>
 
       {/* Main Chat Container */}
-      <section
-        aria-label="AI Coach Chat"
-        className="bg-white border border-slate-200/80 rounded-2xl flex flex-col h-[620px] shadow-2xs"
+      {/* Simulation / Gemini API Service Boundary Badge */}
+      <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 flex items-start gap-3 shadow-2xs">
+        <Sparkles className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
+        <div className="text-xs text-slate-600 leading-relaxed">
+          <strong className="text-slate-900 font-semibold">Simulated AI Assistant (Rule Heuristics):</strong>{' '}
+          In this client-side prototype, coaching responses are generated via deterministic nutrition rule heuristics grounded in your active diary logs. The backend handoff architecture establishes the API boundary for production Gemini 1.5 Flash / Pro integration via FastAPI (<code className="font-mono text-slate-800 bg-slate-100 px-1 py-0.5 rounded">POST /api/v1/ai/chat</code>).
+        </div>
+      </div>
+
+      <Card
+        variant="elevated"
+        className="flex flex-col h-[620px] p-0 overflow-hidden"
       >
         {/* Chat Top Bar */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -157,20 +169,20 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => onNavigate(NavigationTab.Diet)}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
             >
               Open Food Log
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => onNavigate(NavigationTab.Progress)}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
             >
               View Progress
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -217,7 +229,7 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
                             {msg.structuredInsight.title}
                           </h3>
                         </div>
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                           Demonstration Insight
                         </span>
                       </div>
@@ -238,7 +250,7 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
                             <strong className="font-mono text-xs font-bold text-slate-900 block mt-0.5">
                               {m.current}
                             </strong>
-                            <span className="text-[11px] text-slate-400 block mt-0.5">
+                            <span className="text-[11px] text-slate-500 block mt-0.5">
                               {m.target}
                             </span>
                           </div>
@@ -267,7 +279,7 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
                     </div>
                   )}
 
-                  <div className={`text-[11px] ${isUser ? 'text-sky-100' : 'text-slate-400'}`}>
+                  <div className={`text-[11px] ${isUser ? 'text-sky-100' : 'text-slate-500'}`}>
                     {msg.timestamp}
                   </div>
                 </div>
@@ -322,10 +334,11 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
           <form onSubmit={handleFormSubmit} className="flex items-center gap-2">
             <input
               type="text"
+              aria-label="Ask your AI coach a question"
               value={inputPrompt}
               onChange={(e) => setInputPrompt(e.target.value)}
               placeholder="Ask a question about your meals, protein target, or dinner options..."
-              className="flex-1 px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500 transition-colors"
+              className="flex-1 px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-sky-500 focus-visible:ring-2 focus-visible:ring-sky-500 transition-colors"
             />
             <button
               type="submit"
@@ -337,7 +350,7 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
             </button>
           </form>
         </div>
-      </section>
+      </Card>
     </div>
   );
 };
