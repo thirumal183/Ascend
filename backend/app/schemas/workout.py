@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -70,7 +70,9 @@ class WorkoutPlanResponse(BaseModel):
     estimatedMinutes: int
     intensityLabel: str
     targetCaloriesBurned: int
-    recommendedPathway: Optional[str] = None
+    recommendedPathway: Optional[
+        Literal["General Nutrition & Diet", "Athlete Performance", "Weight Gain & Muscle Gain"]
+    ] = None
     isSystemTemplate: bool
     createdByUserId: Optional[uuid.UUID] = None
     createdAt: datetime
@@ -93,7 +95,9 @@ class CreateWorkoutPlanRequest(BaseModel):
     estimatedMinutes: int = Field(default=45, gt=0)
     intensityLabel: str = Field(default="Moderate", pattern=r"^(Low|Moderate|High|Peak Performance)$")
     targetCaloriesBurned: int = Field(default=300, ge=0)
-    recommendedPathway: Optional[str] = None
+    recommendedPathway: Optional[
+        Literal["General Nutrition & Diet", "Athlete Performance", "Weight Gain & Muscle Gain"]
+    ] = None
     exercises: List[CreateExerciseItemRequest] = Field(default_factory=list)
 
 

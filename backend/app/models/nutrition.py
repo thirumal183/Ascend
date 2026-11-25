@@ -127,10 +127,38 @@ class FoodItem(Base):
         index=True,
     )
     data_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_provider: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default="legacy_demo",
+        server_default=text("'legacy_demo'"),
+    )
+    source_external_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    license_type: Mapped[str] = mapped_column(
+        String(60),
+        nullable=False,
+        default="unspecified",
+        server_default=text("'unspecified'"),
+    )
+    verification_status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="unverified",
+        server_default=text("'unverified'"),
+    )
+    source_attribution: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    barcode: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
+    import_batch_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     __table_args__ = (
@@ -138,10 +166,25 @@ class FoodItem(Base):
             "preparation_state IN ('raw', 'cooked', 'packaged', 'composite_dish')",
             name="ck_food_preparation_state",
         ),
+        CheckConstraint(
+            "source_provider IN ('usda_fdc', 'open_food_facts', 'ascend_recipe_estimate', 'user_custom', 'legacy_demo')",
+            name="ck_food_source_provider",
+        ),
+        CheckConstraint(
+            "verification_status IN ('lab_verified', 'label_reported', 'recipe_estimated', 'user_entered', 'unverified')",
+            name="ck_food_verification_status",
+        ),
         Index(
             "idx_food_items_custom_user",
             "created_by_user_id",
             postgresql_where=text("is_custom_user_food = true"),
+        ),
+        Index(
+            "uq_food_items_source_identity",
+            "source_provider",
+            "source_external_id",
+            unique=True,
+            postgresql_where=text("is_custom_user_food = false AND source_external_id IS NOT NULL"),
         ),
     )
 

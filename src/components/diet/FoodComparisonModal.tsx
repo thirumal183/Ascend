@@ -241,13 +241,14 @@ export const FoodComparisonModal: React.FC<FoodComparisonModalProps> = ({
           {comparedFoods.length === 0 ? (
             <div className="py-12 text-center text-sm text-slate-500 space-y-2">
               <p>No foods selected for comparison.</p>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500">
                 Select 2 or 3 foods from the catalogue to compare them
                 side-by-side.
               </p>
             </div>
           ) : (
-            <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100">
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+            <div className="min-w-[520px] divide-y divide-slate-100">
               {/* Food Header Row */}
               <div className="grid grid-cols-12 bg-slate-50/80 p-4 font-semibold text-xs text-slate-700 items-center">
                 <div className="col-span-3 text-slate-500 uppercase tracking-wider text-[11px]">
@@ -572,32 +573,7 @@ export const FoodComparisonModal: React.FC<FoodComparisonModalProps> = ({
                   </div>
                 ))}
               </div>
-
-              {/* Provenance Attribution */}
-              <div className="grid grid-cols-12 p-3.5 text-[11px] items-center bg-slate-50/50">
-                <div className="col-span-3 font-medium text-slate-500">
-                  Data Source & License
-                </div>
-                {comparedFoods.map((food) => (
-                  <div
-                    key={food.id}
-                    className={`${
-                      comparedFoods.length === 1
-                        ? 'col-span-9'
-                        : comparedFoods.length === 2
-                          ? 'col-span-4'
-                          : 'col-span-3'
-                    } px-2 space-y-0.5`}
-                  >
-                    <span className="font-semibold text-slate-700 block truncate">
-                      {food.sourceProvenance?.sourceName || food.brandOrSource}
-                    </span>
-                    <span className="text-slate-400 block font-mono text-[10px]">
-                      {food.sourceProvenance?.licenseType || 'Demo'}
-                    </span>
-                  </div>
-                ))}
-              </div>
+            </div>
             </div>
           )}
         </div>

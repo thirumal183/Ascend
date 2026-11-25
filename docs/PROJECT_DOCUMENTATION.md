@@ -90,10 +90,10 @@ Browser (React 19 SPA)
 
 ## 7. Implemented vs. Demo / Future Scope
 
-- **Implemented Production Features:** Full PostgreSQL persistence for auth, profiles, goals, custom foods, meal intake snapshots, water intake, workout plans/exercises/sessions/set logs, progress records, and AI conversations.
-- **Demo / Prototype Mode:** Unauthenticated visitors can click **Explore Live Demo** to test preloaded sample meals, workouts, and progress charts locally (`prototypeSessionStorage`) without touching the backend database. Demo state is strictly cleared upon live sign-in.
-- **Known Pre-Launch Condition:** The live Neon database currently contains test-generated public `food_items` and `workout_plans` rows from `pytest` runs; a clean production seed script should populate curated foods/templates before public launch.
-- **Future Scope:** Live deployed browser E2E verification, automated USDA/nutrition dataset import CLI, wearable step/HR sync, and offline PWA caching.
+- **Implemented Production Features:** Full PostgreSQL persistence for auth, profiles, goals, custom foods, meal intake snapshots, water intake, workout plans/exercises/sessions/set logs, progress records, and AI conversations, plus an idempotent food-data ingestion pipeline (`backend/app/db/ingest/`) supporting USDA FoodData Central, Open Food Facts, documented Indian culinary recipe estimates, and 3-pathway system workout template seeding.
+- **Demo / Prototype Mode:** Unauthenticated visitors can click **Explore Live Demo** to test preloaded sample meals, workouts, and progress charts locally (`prototypeSessionStorage`) without touching the backend database. Demo foods are explicitly labeled `Demo Baseline` (`legacy_demo` / `demonstration`) and strictly cleared upon live sign-in.
+- **Pre-Launch Seeding Step:** Local PostgreSQL verification has imported 8,157 USDA FoodData Central items, 15 Indian recipe estimates, and 3 system workout templates; production Neon seeding must be executed explicitly via `backend/app/db/ingest/cli.py` during deployment (see [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) and [FOOD_DATA_PROVENANCE_AND_INGESTION.md](./FOOD_DATA_PROVENANCE_AND_INGESTION.md)).
+- **Future Scope:** Live deployed browser E2E verification, bulk Open Food Facts regional catalog import once upstream exports are fetched, wearable step/HR sync, and offline PWA caching.
 
 ---
 

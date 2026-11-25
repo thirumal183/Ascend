@@ -33,7 +33,7 @@ interface ProgressTrackingViewProps {
   goals: NutritionGoals;
   userProfile: UserProfile;
   onAddProgressRecord: (record: Omit<ProgressRecord, 'id'>) => void;
-  onLoadDemoProgress: () => void;
+  onLoadDemoProgress?: () => void;
 }
 
 export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
@@ -121,13 +121,13 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
       chestCm: chest,
       armCm: undefined,
       thighCm: undefined,
-      caloriesConsumed: goals.dailyCalories,
-      proteinConsumedG: goals.proteinG,
-      carbsConsumedG: goals.carbsG,
-      fatConsumedG: goals.fatG,
-      workoutCompleted: true,
-      activityMinutes: 45,
-      stepsCount: goals.dailySteps,
+      caloriesConsumed: 0,
+      proteinConsumedG: 0,
+      carbsConsumedG: 0,
+      fatConsumedG: 0,
+      workoutCompleted: false,
+      activityMinutes: 0,
+      stepsCount: 0,
       source: 'logged',
     });
 
@@ -405,7 +405,7 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
               >
                 Log Your Weight
               </button>
-              {progressHistory.length === 0 && (
+              {progressHistory.length === 0 && onLoadDemoProgress && (
                 <button
                   type="button"
                   onClick={onLoadDemoProgress}

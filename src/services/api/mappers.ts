@@ -23,9 +23,11 @@ import {
   ProfileArchetype,
   ProgressRecord,
   ServingUnit,
+  SourceProvider,
   UnitSystem,
   UserAccount,
   UserProfile,
+  VerificationStatus,
   WorkoutPlan,
 } from '../../types/ascend';
 import { AuthMeResponse, UserProfileResponse, NutritionGoalResponse } from './authApi';
@@ -181,6 +183,17 @@ export function mapBackendFoodItemToFrontend(item: BackendFoodItem): FoodItem {
     },
     isMicronutrientComplete: item.isMicronutrientComplete,
     dataNote: item.dataNote || undefined,
+    sourceProvenance: {
+      sourceProvider: (item.sourceProvider as SourceProvider) || (item.isCustomUserFood ? 'user_custom' : 'legacy_demo'),
+      sourceName: item.brandOrSource,
+      sourceId: item.sourceExternalId || item.code || undefined,
+      sourceAttribution: item.sourceAttribution || undefined,
+      barcode: item.barcode || undefined,
+      verificationStatus:
+        (item.verificationStatus as VerificationStatus) ||
+        (item.isCustomUserFood ? 'user_entered' : 'unverified'),
+      licenseType: item.licenseType || (item.isCustomUserFood ? 'User-Private' : 'unspecified'),
+    },
   };
 }
 

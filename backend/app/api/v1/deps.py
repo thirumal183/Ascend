@@ -21,9 +21,14 @@ reusable_oauth2 = OAuth2PasswordBearer(
 )
 
 
+from app.core.rate_limit import resolve_client_ip
+
+
 def get_client_info(request: Request) -> dict[str, str]:
     """Extracts client IP address and User-Agent telemetry."""
-    ip = request.client.host if request.client else "127.0.0.1"
+    ip = resolve_client_ip(request)
+    if ip == "unknown":
+        ip = "127.0.0.1"
     ua = request.headers.get("user-agent", "Unknown Client")
     return {"ip_address": ip, "device_info": ua}
 

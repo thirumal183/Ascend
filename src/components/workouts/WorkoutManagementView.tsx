@@ -28,6 +28,7 @@ interface WorkoutManagementViewProps {
   workoutPlans: WorkoutPlan[];
   userPathway: OnboardingPathway;
   onToggleExercise: (workoutId: string, exerciseId: string) => void;
+  onResetWorkoutPlan?: (workoutId: string) => void;
   onAddExercise: (
     workoutId: string,
     exercise: Omit<ExerciseItem, 'id'>
@@ -43,6 +44,7 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
   workoutPlans,
   userPathway,
   onToggleExercise,
+  onResetWorkoutPlan,
   onAddExercise,
   onUpdateExerciseSets,
 }) => {
@@ -306,12 +308,15 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
             <button
               type="button"
               onClick={() => {
-                // Untoggle all exercises to allow re-running
-                activePlan.exercises.forEach((ex) => {
-                  if (ex.completed) {
-                    onToggleExercise(activePlan.id, ex.id);
-                  }
-                });
+                if (onResetWorkoutPlan) {
+                  onResetWorkoutPlan(activePlan.id);
+                } else {
+                  activePlan.exercises.forEach((ex) => {
+                    if (ex.completed) {
+                      onToggleExercise(activePlan.id, ex.id);
+                    }
+                  });
+                }
               }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-white border border-emerald-300 hover:bg-emerald-100 rounded-lg transition-colors shrink-0"
             >

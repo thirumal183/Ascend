@@ -5,61 +5,36 @@
 ![React 19](https://img.shields.io/badge/Frontend-React%2019%20%2B%20TypeScript-2563EB)
 ![FastAPI](https://img.shields.io/badge/Backend-FastAPI%20%2B%20SQLAlchemy%202.0-0A1628)
 ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL%2016%2B%20(3NF)-15803D)
-![Deployment](https://img.shields.io/badge/Deploy-Vercel%20%2B%20Render%20%2B%20Neon-7C3AED)
+![Deployment](https://img.shields.io/badge/Status-Deployment%20in%20Progress-7C3AED)
 
-ASCEND is a full-stack nutrition, workout, and biometric tracking platform designed to adapt to distinct fitness objectives. It combines Mifflin-St Jeor energy modeling, Third Normal Form (3NF) food and nutrient tracking, per-set workout telemetry, and goal-aware AI coaching inside one cohesive web application.
+ASCEND is a full-stack nutrition, workout, and biometric tracking platform built to adapt to distinct personal fitness goals. It combines Mifflin-St Jeor energy modeling, Third Normal Form (3NF) food and nutrient storage, per-set workout telemetry, hydration tracking, and goal-aware AI coaching inside one cohesive web application.
 
----
-
-## Live Demo
-
-`Live Demo: [Coming Soon — Deployment in Progress]`
-
-*(Target deployment: Vercel frontend & API proxy + Render Free FastAPI + Neon Free PostgreSQL. Production deployment URL will be added here after release.)*
+Generic calorie trackers often apply a single formula to everyone, overwrite historical meal logs when food definitions change, or expose session tokens in browser `localStorage`. ASCEND solves these problems for everyday users, endurance/performance athletes, and muscle-building lifters through pathway-specific adaptation, immutable meal snapshots, local PostgreSQL food search, and hardened cookie-based session security.
 
 ---
 
-## Project Overview
+## Deployment Status
 
-Generic calorie trackers often apply one static formula to every user, overwrite historical meal logs when food definitions change, or store sensitive authentication tokens in browser `localStorage`. ASCEND addresses these gaps with:
+`Status: Deployment in Progress (Vercel + Render + Neon)`
 
-1. **Pathway-Driven Adaptation:** Tailors dashboards, macro splits, hydration targets, workout templates, and AI guidance across three distinct user pathways.
-2. **Relational Data Integrity:** Models food nutrients in Pure 3NF (`nutrients` + `food_nutrients`), preserves `null` for unmeasured micronutrients, and freezes nutrient snapshots on logged meals.
-3. **Production-Grade Session Security:** Uses Argon2id password hashing, memory-only JWT access tokens, rotating `HttpOnly` refresh cookies with replay detection, and a same-origin Vercel API proxy.
-
----
-
-## Three Pathways
-
-| Pathway | Target Focus | Daily Nutrition & Hydration Strategy |
-| :--- | :--- | :--- |
-| **General Nutrition & Diet** | Sustainable fat loss, maintenance, and everyday habits | Balanced macros, `-420 kcal/day` deficit (for Weight Loss), `36 ml/kg` hydration, meal timeline |
-| **Athlete Performance** | Structured training blocks and high-output recovery | `+200 kcal/day` fueling buffer, `2.2 g/kg` protein, carbohydrate timing, `+450 ml` sweat-loss hydration buffer |
-| **Weight Gain & Muscle Gain** | Controlled caloric surplus and hypertrophy | `+350 kcal/day` lean surplus, `2.1 g/kg` protein across 4 feeding windows, progressive overload tracking |
+Production deployment has not yet been executed. See [docs/DEPLOYMENT_GUIDE.md](./docs/DEPLOYMENT_GUIDE.md) for the locked deployment architecture and pre-launch Neon seeding steps.
 
 ---
 
 ## Key Features
 
-- **Personalized Nutrition & Goals:** Live Mifflin-St Jeor BMR/TDEE calculation, pace projection, macro percentage breakdown, and customizable calorie/macro/water targets.
-- **Food Catalogue & Meal Logging:** Trigram-indexed food search, raw/cooked preparation states, unit-aware portion scaling (`g`, `ml`, `oz`, `cup`, `serving`), side-by-side nutrient comparison, user-private custom foods, and immutable intake snapshots.
-- **Hydration Tracking:** One-tap `+250ml`, `+500ml`, `+750ml`, and `-250ml` hydration logging persisted in PostgreSQL.
-- **Workout Planning & Set Telemetry:** Pathway workout templates, custom workout plans, user-scoped ad-hoc exercises, live inter-set rest countdown timer, and per-set reps/load (`kg`)/RPE logging.
-- **Progress Analytics:** Weight, body fat %, and circumference check-ins with 28-day filtering and interactive Recharts trend curves.
-- **AI Coach:** Multi-turn conversational guidance powered by Google Gemini 2.5 Flash (server-side API key) with automatic deterministic local heuristic fallback and explicit non-medical boundaries.
-- **Calendar & Reports:** Monthly meal/workout consistency calendar, 7-day rolling adherence summary, and formula-injection-safe CSV export.
-- **Secure Authentication & Demo Isolation:** Argon2id auth, rotating `HttpOnly` refresh cookies, password-confirmed pathway switching, and an isolated unauthenticated Demo Mode.
-
----
-
-## Application Screenshots
-
-> *Production-hosted screenshots will be added after Vercel + Render + Neon deployment.*
-
-- `[Screenshot Placeholder: Editorial Landing Page & Startup Intro]`
-- `[Screenshot Placeholder: General Nutrition, Athlete Performance & Muscle Gain Dashboards]`
-- `[Screenshot Placeholder: Diet & Meal Logging + Food Comparison]`
-- `[Screenshot Placeholder: Workout Runner, Goals & AI Coach]`
+- **Three Goal Pathways:** Adapts calorie/macro targets, hydration buffers, workout templates, dashboards, and AI coaching across:
+  - **General Nutrition & Diet:** Balanced macro distribution, sustainable deficit/maintenance modeling, and daily meal adherence.
+  - **Athlete Performance:** Fueling buffer, `2.2 g/kg` protein framing, carbohydrate timing, and `+450 ml` sweat-loss hydration adjustment.
+  - **Weight Gain & Muscle Gain:** Controlled lean surplus, `2.1 g/kg` protein targets, and hypertrophy progressive overload tracking.
+- **Food Catalogue & Live Search:** PostgreSQL-backed search (`pg_trgm`) across imported USDA FoodData Central items and documented ASCEND Indian recipe estimates, with category filters and raw/cooked/recipe preparation tags.
+- **Meal Logging & Portion Customization:** Unit-aware scaling (`g`, `ml`, `oz`, `cup`, `serving`), side-by-side nutrient comparison, user-private custom foods, 6-second Undo support, and immutable nutrient snapshots saved on each meal log.
+- **Hydration Tracking:** Quick-add hydration controls (`+250 ml`, `+500 ml`, `+750 ml`, `-250 ml`) persisted in PostgreSQL (`water_intake_records`).
+- **Workout Plans & Set-by-Set Telemetry:** Pathway workout templates, custom plans, user-scoped ad-hoc exercises, an interactive rest timer, and per-set reps/load (`kg`) persistence.
+- **Progress Tracking & Reports:** Weight, body fat %, and circumference check-ins with Recharts trend curves, 30-day adherence reports, and formula-injection-safe CSV export.
+- **Calendar & Goal Management:** Monthly nutrition/workout consistency calendar and live Mifflin-St Jeor BMR/TDEE goal recalculation.
+- **AI Coach with Fallback:** Multi-turn coaching powered by Google Gemini 2.5 Flash (server-side key) with automatic deterministic local heuristic fallback when Gemini is unavailable or unconfigured.
+- **Authentication & Demo Isolation:** Argon2id password hashing, rotating `HttpOnly` refresh cookies, device session management, password-verified pathway switching, and an isolated offline Demo Mode.
 
 ---
 
@@ -67,36 +42,56 @@ Generic calorie trackers often apply one static formula to every user, overwrite
 
 | Layer | Technologies |
 | :--- | :--- |
-| **Frontend** | React 19, TypeScript, Vite 8, Tailwind CSS 4, Lucide React, Recharts |
-| **Backend** | Python 3.13, FastAPI, SQLAlchemy 2.0 Async, `asyncpg`, Pydantic v2, Alembic, Argon2id (`argon2-cffi`), PyJWT |
-| **Database** | PostgreSQL 16+ (16 relational tables + `v_food_items_with_nutrients`, `pg_trgm` extension) |
-| **AI Integration** | Google Gemini 2.5 Flash (`generativelanguage.googleapis.com` via `httpx`) + deterministic local heuristic fallback |
-| **Deployment Target** | Vercel (Frontend + `/api/*` serverless proxy), Render Free (FastAPI), Neon Free (Serverless PostgreSQL) |
+| **Frontend** | React 19, TypeScript 5, Vite 8, Tailwind CSS 4 (`@tailwindcss/vite`), Lucide React, Recharts |
+| **Backend** | Python 3.13, FastAPI, Pydantic v2, SQLAlchemy 2.0 Async, `asyncpg`, Alembic, Argon2id (`argon2-cffi`), PyJWT |
+| **Database** | PostgreSQL 16+ (16 application tables + `v_food_items_with_nutrients`, `pg_trgm` extension) |
+| **Infrastructure** | Vercel (Frontend + `/api/proxy.ts` same-origin proxy), Render (FastAPI backend), Neon (PostgreSQL) |
+| **AI Integration** | Google Gemini Developer API (`gemini-2.5-flash` via `httpx`) + deterministic local heuristic fallback |
+
+### Role of the Vercel Proxy & Server-Side Environment Variables
+In production, browser requests target same-origin `/api/v1/...`, which `vercel.json` rewrites to [api/proxy.ts](./api/proxy.ts). The serverless proxy forwards requests server-to-server to `RENDER_BACKEND_URL` (stored strictly server-side on Vercel without a `VITE_` prefix), preserves multi-value `Set-Cookie` headers so `HttpOnly` refresh cookies work first-party without third-party cookie blocking, blocks path traversal/SSRF, and forwards verified client IPs. Secrets (`DATABASE_URL`, `SECRET_KEY`, `GEMINI_API_KEY`) remain strictly on Render.
 
 ---
 
-## Architecture Overview
+## Architecture
 
 ```mermaid
 flowchart LR
     Browser["Browser (React 19 + Vite SPA)"] -->|"Same-Origin HTTPS (/api/v1/*) + HttpOnly Cookie"| VercelProxy["Vercel Serverless Proxy (api/proxy.ts)"]
     VercelProxy -->|"Server-to-Server HTTPS (RENDER_BACKEND_URL)"| FastAPI["Render FastAPI Backend"]
-    FastAPI -->|"SQLAlchemy 2.0 Async + asyncpg TLS"| NeonDB[("Neon PostgreSQL 16+")]
+    FastAPI -->|"SQLAlchemy 2.0 Async + asyncpg TLS"| PostgreSQL[("Neon PostgreSQL 16+")]
     FastAPI -->|"x-goog-api-key (Server-Side Only)"| Gemini["Gemini 2.5 Flash / Local Fallback"]
 ```
 
+- **Authentication & Session Flow:** Access tokens (30-minute HS256 JWT) live only in JS memory. Refresh tokens (7-day opaque secrets) are stored as `SHA-256` hashes in `user_refresh_sessions` and delivered via `HttpOnly; SameSite=Lax` cookies scoped to `/api/v1/auth` with `X-Requested-With` CSRF protection and token-reuse detection.
+- **Local-First Food Catalogue Ingestion:** External nutrition datasets are downloaded and normalized offline via `backend/app/db/ingest/cli.py` into PostgreSQL. Runtime food search queries only ASCEND's PostgreSQL database—never external food APIs.
+
 ---
 
-## Database Overview
+## Database Design
 
-ASCEND uses a **16-table normalized PostgreSQL schema** across five domains:
-- **Identity & Profiles:** `users`, `user_refresh_sessions`, `user_profiles`, `nutrition_goals`
-- **Nutrition (Pure 3NF):** `nutrients`, `food_items`, `food_nutrients`, `intake_records` (frozen snapshots), `water_intake_records`
-- **Workouts:** `workout_plans`, `exercise_items`, `workout_sessions`, `exercise_set_logs`
-- **Biometrics:** `progress_records`
-- **AI Coach:** `chat_conversations`, `chat_messages`
+ASCEND uses a **16-table normalized PostgreSQL schema** plus **1 database view** (`v_food_items_with_nutrients`), managed with **Alembic** (current head: `e7f8a9b0c1d2`):
 
-See [docs/DATABASE_AND_API.md](./docs/DATABASE_AND_API.md) and [docs/architecture/ER_DIAGRAM.md](./docs/architecture/ER_DIAGRAM.md) for the full ER diagram and schema details.
+- **Identity & Security (`4` tables):** `users`, `user_refresh_sessions`, `user_profiles`, `nutrition_goals`
+- **Nutrition — Pure 3NF (`5` tables + `1` view):** `nutrients`, `food_items` (with provenance metadata, check constraints, and partial unique index `uq_food_items_source_identity`), `food_nutrients` (omits unmeasured micronutrients as `null`), `intake_records` (immutable frozen nutrient snapshots), `water_intake_records`, plus `v_food_items_with_nutrients`
+- **Workouts (`4` tables):** `workout_plans`, `exercise_items`, `workout_sessions`, `exercise_set_logs`
+- **Biometrics (`1` table):** `progress_records`
+- **AI Coach (`2` tables):** `chat_conversations`, `chat_messages`
+
+See [docs/DATABASE_AND_API.md](./docs/DATABASE_AND_API.md) and [docs/architecture/ER_DIAGRAM.md](./docs/architecture/ER_DIAGRAM.md) for full schema, constraint, and migration details.
+
+---
+
+## Food Data & Methodology
+
+ASCEND isolates food composition sources and licenses in PostgreSQL and displays attribution in a single **Food Data Sources & Attribution** section on the homepage:
+
+- **USDA FoodData Central (`Public Domain · CC0 1.0`):** Imported locally from official Foundation Foods and SR Legacy archives (`8,157` items verified in local PostgreSQL).
+- **ASCEND Indian Recipe Estimates (`Estimated · Non-Lab`):** `15` independently documented composite Indian dishes calculated from standardized ingredient weights (`backend/app/db/ingest/recipes_indian.json`), explicitly labeled as estimates rather than laboratory reference values.
+- **Open Food Facts (`ODbL 1.0 · Pending Import`):** Ingestion adapter (`off_adapter.py`) is implemented and unit-tested; bulk dataset import is pending upstream export availability (upstream returned HTTP 503 during acquisition).
+- **ICMR-NIN IFCT 2017 (`Pending Authorization`):** Electronic IFCT tables are not bundled or redistributed without prior written authorization from ICMR-NIN.
+
+See [docs/FOOD_DATA_PROVENANCE_AND_INGESTION.md](./docs/FOOD_DATA_PROVENANCE_AND_INGESTION.md) for details.
 
 ---
 
@@ -104,41 +99,46 @@ See [docs/DATABASE_AND_API.md](./docs/DATABASE_AND_API.md) and [docs/architectur
 
 ```text
 Ascend/
-├── src/                        # React 19 + TypeScript frontend
-│   ├── components/             # Landing, Dashboard, Diet, Workouts, Progress, Goals, Coach, Calendar, Reports, Settings
-│   ├── services/               # API clients (src/services/api/*) & nutrition calculation helpers
-│   ├── data/                   # Demo baseline & curated sample food database
-│   ├── types/                  # Shared TypeScript interfaces & enums
-│   └── utils/                  # Date and formatting utilities
-├── backend/                    # FastAPI + SQLAlchemy 2.0 Async backend
-│   ├── app/                    # Endpoints, services, models, schemas, core config/security
-│   ├── alembic/                # Reversible PostgreSQL migrations (head: d4e5f6a7b8c9)
-│   ├── tests/                  # Pytest unit & API test suite
-│   ├── requirements.txt
-│   └── pyproject.toml
-├── api/                        # Vercel same-origin serverless API proxy (api/proxy.ts)
-├── docs/                       # Consolidated documentation & architecture specs
-│   ├── PROJECT_DOCUMENTATION.md
-│   ├── ENGINEERING_AND_RELEASE_HISTORY.md
-│   ├── DEPLOYMENT_GUIDE.md
+├── src/                                  # React 19 + TypeScript frontend
+│   ├── components/                       # Landing, Dashboard, Diet, Workouts, Progress, Goals, Coach, Calendar, Reports, Settings
+│   ├── services/                         # API clients (src/services/api/*) & nutrition calculators
+│   ├── data/                             # Offline Demo Mode baseline dataset
+│   ├── types/                            # Shared TypeScript interfaces & enums
+│   └── utils/                            # Date & formatting helpers
+├── backend/                              # FastAPI + SQLAlchemy 2.0 Async backend
+│   ├── app/
+│   │   ├── api/v1/                       # Versioned REST endpoints & dependencies
+│   │   ├── core/                         # Config, database pool, rate limiter, security
+│   │   ├── db/ingest/                    # USDA, OFF, recipe ingestion pipeline & workout seeder CLI
+│   │   ├── models/                       # SQLAlchemy 2.0 ORM models & view
+│   │   ├── schemas/                      # Pydantic v2 request/response contracts
+│   │   └── services/                     # Domain business logic
+│   ├── alembic/                          # Reversible migrations (head: e7f8a9b0c1d2)
+│   └── tests/                            # Pytest suite (63 tests)
+├── api/                                  # Vercel same-origin serverless proxy (api/proxy.ts)
+├── docs/
+│   ├── architecture/                     # System architecture, DB design, ER diagram, API & security specs
+│   ├── reports/                          # Final engineering audit & integration reports
 │   ├── DATABASE_AND_API.md
-│   └── architecture/
-├── scripts/                    # E2E integration, security, pathway, and proxy test scripts
-├── vercel.json                 # Vercel Vite build & /api/:path* rewrite config
-├── render.yaml                 # Render Free backend blueprint
-├── vite.config.ts              # Vite build & manual chunk splitting
-├── .env.example                # Frontend environment template
-└── backend/.env.example        # Backend environment template
+│   ├── DEPLOYMENT_GUIDE.md
+│   ├── ENGINEERING_AND_RELEASE_HISTORY.md
+│   ├── FOOD_DATA_PROVENANCE_AND_INGESTION.md
+│   └── PROJECT_DOCUMENTATION.md
+├── scripts/                              # E2E integration, security, pathway, proxy & UI checks
+├── vercel.json                           # Vercel build & /api/:path* rewrite rules
+├── render.yaml                           # Render Free web service specification
+├── .env.example                          # Frontend environment template
+└── backend/.env.example                  # Backend environment template
 ```
 
 ---
 
-## Local Setup (Windows / PowerShell)
+## Local Development Setup (Windows / PowerShell)
 
 ### Prerequisites
-- Node.js 20+ (`npm`)
-- Python 3.12+ (`pip`)
-- PostgreSQL 16+ (local instance or Neon connection URI)
+- Node.js 20+ (`npm.cmd`)
+- Python 3.12+ (`python` / `pip`)
+- PostgreSQL 16+ running locally
 
 ### 1. Frontend Setup
 ```powershell
@@ -149,13 +149,25 @@ Copy-Item .env.example .env
 ### 2. Backend & Database Setup
 ```powershell
 cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item .env.example .env
-# Edit backend/.env with your PostgreSQL credentials or DATABASE_URL
+# Update backend/.env with your local PostgreSQL connection string (never commit .env)
 python -m alembic upgrade head
 ```
 
-### 3. Run Locally (Two Terminals)
+### 3. Optional: Seed Local Food Catalogue & Workout Templates
+Place downloaded USDA FoodData Central `.zip` archives into `backend/data/raw/` (gitignored), then run from `backend/`:
+```powershell
+python -m app.db.ingest.cli import-usda --file data/raw/<foundation.zip> --target-db local
+python -m app.db.ingest.cli import-usda --file data/raw/<sr_legacy.zip> --target-db local
+python -m app.db.ingest.cli import-recipes --target-db local
+python -m app.db.ingest.cli seed-workouts --target-db local
+python -m app.db.ingest.cli verify-counts --target-db local
+```
+
+### 4. Run Locally (Two Terminals)
 ```powershell
 # Terminal 1 — FastAPI Backend (port 8000)
 cd backend
@@ -167,55 +179,40 @@ npm.cmd run dev
 
 ---
 
-## Environment Variables
+## Testing & Verification
 
-Reference templates are provided at [.env.example](./.env.example) and [backend/.env.example](./backend/.env.example). **Never commit real `.env` files, database credentials, JWT secrets, or `GEMINI_API_KEY` values.**
+Latest verified results from [docs/reports/ASCEND_FINAL_ENGINEERING_AUDIT_REPORT.md](./docs/reports/ASCEND_FINAL_ENGINEERING_AUDIT_REPORT.md):
 
----
-
-## Testing
-
-| Check | Command | Purpose |
+| Check | Command | Latest Result |
 | :--- | :--- | :--- |
-| TypeScript Check | `npm.cmd run lint` | Runs `tsc --noEmit` across `src/` |
-| Production Build | `npm.cmd run build` | Builds optimized Vite bundle (`dist/`) |
-| Backend Suite | `cd backend; python -m pytest tests/ -v` | Runs backend unit & API tests (requires test/dev DB) |
-| Integration E2E | `npx.cmd tsx scripts/test_batch7_integration.ts` | End-to-end API flow against running backend |
-| Security Audit | `npx.cmd tsx scripts/test_batch8_security_audit.ts` | Auth, replay detection & cross-tenant isolation tests |
-| Pathway Journeys | `npx.cmd tsx scripts/test_batch8_pathways.ts` | Verifies all three pathways end-to-end |
-| Vercel Proxy Suite | `npx.cmd tsx scripts/test_phase6_5_2_vercel_proxy.ts` | Unit + live-HTTP tests for `api/proxy.ts` & `vercel.json` |
+| TypeScript Check | `npm.cmd run lint` | **Passed (0 errors)** |
+| Production Build | `npm.cmd run build` | **Passed (`2105` modules)** |
+| Dependency Security Audit | `npm.cmd audit --audit-level=moderate` | **Passed (`0` vulnerabilities)** |
+| Backend Test Suite | `cd backend; pytest tests/ -v` *(against isolated local PG18)* | **63/63 Passed** |
+| Integration E2E Suite | `npx.cmd tsx scripts/test_batch7_integration.ts` | **44/44 Passed** |
+| Security & Isolation Audit | `npx.cmd tsx scripts/test_batch8_security_audit.ts` | **22/22 Passed** |
+| Multi-Pathway Journeys | `npx.cmd tsx scripts/test_batch8_pathways.ts` | **33/33 Passed** |
+| Vercel Proxy Suite | `npx.cmd tsx scripts/test_phase6_5_2_vercel_proxy.ts` | **16/16 Passed** |
+| Catalogue UI & Live Search | `npx.cmd tsx scripts/test_food_catalogue_ui_and_live_search.ts` | **Passed** |
+
+*Note on Browser Testing:* Automated API, unit, integration, and static UI checks all passed. Interactive Chrome/Playwright responsive verification across `1440×900`, `1366×768`, `768×1024`, `390×844`, and `375×812` was not completed in the final audit because Chrome remote debugging (`DevToolsActivePort`) and local Playwright were unavailable in the execution environment.
 
 ---
 
-## Documentation
+## Deployment
 
-- [Project Documentation](./docs/PROJECT_DOCUMENTATION.md)
-- [Engineering & Release History](./docs/ENGINEERING_AND_RELEASE_HISTORY.md)
-- [Deployment Guide (Vercel + Render + Neon)](./docs/DEPLOYMENT_GUIDE.md)
-- [Database & API Reference](./docs/DATABASE_AND_API.md)
-- [Detailed Architecture Specs](./docs/architecture/ARCHITECTURE.md)
+ASCEND is configured for zero-cost deployment on **Vercel** (React SPA + `/api/proxy.ts`), **Render Free** (`render.yaml`), and **Neon Free** (PostgreSQL). Production deployment and Neon seeding are intentionally deferred to the deployment stage.
+
+See [docs/DEPLOYMENT_GUIDE.md](./docs/DEPLOYMENT_GUIDE.md) for the complete step-by-step guide.
 
 ---
 
-## Security & Privacy
+## Screenshots
 
-- **Password Hashing:** Argon2id (`asyncio.to_thread` offloaded) with dummy-hash timing equalization on unknown emails.
-- **Token Architecture:** Short-lived JWT access tokens stored strictly in JS memory; opaque rotating refresh tokens hashed (`SHA-256`) in PostgreSQL and delivered via `HttpOnly; SameSite=Lax` cookies with reuse-detection revocation and `X-Requested-With` CSRF protection.
-- **Tenant Isolation:** Every user-owned query scopes by `current_user.id`.
-- **AI Privacy:** `GEMINI_API_KEY` stays strictly server-side (`x-goog-api-key` header); prompts exclude emails, passwords, and names.
+> *Application screenshots are pending post-deployment capture (browser remote debugging was unavailable during the final release environment).*
 
 ---
 
-## Future Scope
+## Disclaimer
 
-- Live production deployment & post-deployment browser E2E verification on Vercel + Render + Neon.
-- Clean production food & workout template seeding CLI.
-- Automated USDA FoodData Central / nutrition dataset importer.
-- Wearable activity & step-count synchronization.
-
----
-
-## Academic Project Information
-
-- **Program:** B.Tech Mathematics & Computing
-- **Institution:** National Institute of Technology Warangal
+ASCEND is a non-medical nutrition, fitness, and lifestyle tracking application intended solely for educational and personal planning purposes. Caloric targets, macronutrient breakdowns, hydration estimates, and AI Coach suggestions do not constitute medical advice, diagnosis, or treatment, and do not replace consultation with a qualified healthcare professional or registered dietitian.

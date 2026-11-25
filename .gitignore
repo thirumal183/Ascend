@@ -5,6 +5,7 @@ coverage/
 .DS_Store
 *.log
 screenshots/
+backend/data/
 .env*
 !.env.example
 

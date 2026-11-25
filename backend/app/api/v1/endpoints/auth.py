@@ -210,10 +210,11 @@ async def logout(
     payload: Optional[LogoutRequest] = None,
 ) -> dict[str, str]:
     """Revokes the current device's refresh token (cookie or body), or invalidates all sessions globally."""
-    raw_token = None if (payload and payload.logoutAll) else _resolve_refresh_token(
+    logout_all = bool(payload and payload.logoutAll)
+    raw_token = None if logout_all else _resolve_refresh_token(
         request, payload.refreshToken if payload else None
     )
-    await AuthService.logout(db=db, user=current_user, raw_refresh_token=raw_token)
+    await AuthService.logout(db=db, user=current_user, raw_refresh_token=raw_token, logout_all=logout_all)
     _clear_refresh_cookie(response)
     return {"message": "Successfully logged out."}
 

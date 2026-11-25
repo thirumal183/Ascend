@@ -63,18 +63,32 @@ export type ServingUnit = 'g' | 'oz' | 'serving' | 'ml' | 'cup';
 
 export type PreparationState = 'raw' | 'cooked' | 'packaged' | 'composite_dish';
 
+export type SourceProvider =
+  | 'usda_fdc'
+  | 'open_food_facts'
+  | 'ascend_recipe_estimate'
+  | 'user_custom'
+  | 'legacy_demo';
+
 export type VerificationStatus =
+  | 'lab_verified'
+  | 'label_reported'
+  | 'recipe_estimated'
+  | 'user_entered'
+  | 'unverified'
   | 'verified_reference'
   | 'packaged_label'
-  | 'user_entered'
   | 'demonstration';
 
 export interface SourceProvenance {
+  sourceProvider?: SourceProvider;
   sourceName: string;
   sourceId?: string;
+  sourceAttribution?: string;
+  barcode?: string;
   retrievalDate?: string;
   verificationStatus: VerificationStatus;
-  licenseType: 'Public Domain (CC0)' | 'Curated Prototype / Demo' | 'ODbL' | 'Proprietary Label';
+  licenseType: string;
 }
 
 export interface UserAccount {

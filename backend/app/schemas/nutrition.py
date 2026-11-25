@@ -61,6 +61,12 @@ class FoodItemResponse(BaseModel):
     isCustomUserFood: bool
     createdByUserId: Optional[uuid.UUID] = None
     dataNote: Optional[str] = None
+    sourceProvider: str = "legacy_demo"
+    sourceExternalId: Optional[str] = None
+    licenseType: str = "unspecified"
+    verificationStatus: str = "unverified"
+    sourceAttribution: Optional[str] = None
+    barcode: Optional[str] = None
     nutrients: CoreNutrientsSchema
     createdAt: datetime
 

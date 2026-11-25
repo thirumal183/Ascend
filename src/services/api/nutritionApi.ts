@@ -43,6 +43,12 @@ export interface BackendFoodItem {
   isCustomUserFood: boolean;
   createdByUserId?: string | null;
   dataNote?: string | null;
+  sourceProvider?: string;
+  sourceExternalId?: string | null;
+  licenseType?: string;
+  verificationStatus?: string;
+  sourceAttribution?: string | null;
+  barcode?: string | null;
   nutrients: CoreNutrients;
   createdAt: string;
 }

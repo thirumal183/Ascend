@@ -92,8 +92,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Demo account shortcut
-    if (email.toLowerCase().includes('demo') || email.toLowerCase() === 'alex.rivera@ascend.app') {
+    // Demo account shortcut (exact demo email only)
+    if (email.toLowerCase() === 'alex.rivera@ascend.app') {
       onSignInSuccess({
         name: 'Alex Rivera (Demo)',
         email: 'alex.rivera@ascend.app',

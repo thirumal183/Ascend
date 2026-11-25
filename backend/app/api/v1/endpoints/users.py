@@ -238,10 +238,11 @@ async def update_my_goals(
     goals.weekly_workout_sessions = payload.weeklyWorkoutSessions
     goals.weekly_activity_minutes = payload.weeklyActivityMinutes
 
-    # Sync protein g/kg telemetry on profile
+    # Sync protein g/kg telemetry on profile within DB check constraint [1.0, 3.5]
     weight_kg = float(profile.current_weight_kg)
     if weight_kg > 0:
-        profile.protein_g_per_kg = Decimal(str(round(payload.proteinG / weight_kg, 2)))
+        ratio = min(3.5, max(1.0, payload.proteinG / weight_kg))
+        profile.protein_g_per_kg = Decimal(str(round(ratio, 2)))
 
     await db.commit()
     await db.refresh(goals)

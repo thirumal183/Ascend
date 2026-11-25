@@ -78,6 +78,12 @@ def create_application() -> FastAPI:
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        if settings.ENVIRONMENT != "development":
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+            )
+        if request.url.path.startswith(f"{settings.API_V1_STR}/auth"):
+            response.headers.setdefault("Cache-Control", "no-store")
         return response
 
     # Global Domain Exception Handler

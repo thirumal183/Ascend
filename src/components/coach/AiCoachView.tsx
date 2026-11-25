@@ -236,7 +236,7 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
       {/* Main Chat Container */}
       <Card
         variant="elevated"
-        className="flex flex-col h-[620px] p-0 overflow-hidden"
+        className="flex flex-col h-[calc(100dvh-16rem)] min-h-[420px] max-h-[620px] p-0 overflow-hidden"
       >
         {/* Chat Top Bar */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">

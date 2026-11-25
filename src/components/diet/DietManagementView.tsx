@@ -57,7 +57,9 @@ interface DietManagementViewProps {
   intakeRecords: IntakeRecord[];
   goals: NutritionGoals;
   initialMeal?: MealType;
-  onAddIntakeRecord: (record: Omit<IntakeRecord, 'id'>) => string;
+  isLiveMode?: boolean;
+  onSearchFoods?: (query: string, category: FoodCategory) => Promise<FoodItem[]>;
+  onAddIntakeRecord: (record: Omit<IntakeRecord, 'id'>) => Promise<string> | string;
   onUpdateIntakeRecord: (
     id: string,
     quantity: number,
@@ -94,6 +96,8 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
   intakeRecords,
   goals,
   initialMeal,
+  isLiveMode = false,
+  onSearchFoods,
   onAddIntakeRecord,
   onUpdateIntakeRecord,
   onDeleteIntakeRecord,
@@ -163,12 +167,35 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
   // Nutrition Intelligence Modal States
   const [modalFood, setModalFood] = useState<FoodItem | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [comparisonFoodIds, setComparisonFoodIds] = useState<string[]>([
-    'food-chicken-breast',
-    'food-paneer',
-    'food-toor-dal',
-  ]);
+  const [comparisonFoodIds, setComparisonFoodIds] = useState<string[]>(() =>
+    isLiveMode ? [] : ['food-chicken-breast', 'food-paneer', 'food-toor-dal']
+  );
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
+
+  useEffect(() => {
+    if (selectedFood.id === 'food-default' && foodCatalog.length > 0) {
+      setSelectedFood(foodCatalog[0]);
+    }
+  }, [foodCatalog, selectedFood.id]);
+
+  const [liveSearchResults, setLiveSearchResults] = useState<FoodItem[] | null>(null);
+
+  const comparisonFoodPool = useMemo(() => {
+    const map = new Map<string, FoodItem>();
+    for (const f of foodCatalog) map.set(f.id, f);
+    if (liveSearchResults) {
+      for (const f of liveSearchResults) map.set(f.id, f);
+    }
+    return Array.from(map.values());
+  }, [foodCatalog, liveSearchResults]);
+
+  useEffect(() => {
+    if (isLiveMode) {
+      setComparisonFoodIds((prev) =>
+        prev.filter((id) => comparisonFoodPool.some((f) => f.id === id))
+      );
+    }
+  }, [isLiveMode, comparisonFoodPool]);
 
   const handleOpenDetails = (food: FoodItem) => {
     setModalFood(food);
@@ -278,10 +305,44 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
     }
   };
 
-  const filteredFoods = useMemo(
-    () => filterFoodCatalog(foodCatalog, searchQuery, selectedCategory),
-    [foodCatalog, searchQuery, selectedCategory]
-  );
+  useEffect(() => {
+    if (!isLiveMode || !onSearchFoods) {
+      setLiveSearchResults(null);
+      return;
+    }
+
+    const trimmed = searchQuery.trim();
+    if (!trimmed && selectedCategory === 'All') {
+      setLiveSearchResults(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const results = await onSearchFoods(trimmed, selectedCategory);
+        if (!cancelled) {
+          setLiveSearchResults(results);
+        }
+      } catch {
+        if (!cancelled) {
+          setLiveSearchResults(null);
+        }
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [isLiveMode, onSearchFoods, searchQuery, selectedCategory]);
+
+  const filteredFoods = useMemo(() => {
+    if (isLiveMode && liveSearchResults !== null) {
+      return liveSearchResults;
+    }
+    return filterFoodCatalog(foodCatalog, searchQuery, selectedCategory);
+  }, [isLiveMode, liveSearchResults, foodCatalog, searchQuery, selectedCategory]);
 
   const previewNutrients = useMemo(
     () => calculateScaledNutrients(selectedFood, quantity, unit),
@@ -301,33 +362,37 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
     [todayIntakeRecords]
   );
 
-  const handleConfirmAddFood = (e: React.FormEvent) => {
+  const handleConfirmAddFood = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (quantity <= 0) return;
+    if (quantity <= 0 || selectedFood.id === 'food-default') return;
 
     const nowTime = new Date().toLocaleTimeString([], {
       hour: '2-digit',
       minute: '2-digit',
     });
 
-    const createdId = onAddIntakeRecord({
-      foodId: selectedFood.id,
-      foodName: selectedFood.name,
-      category: selectedFood.category,
-      meal: selectedMeal,
-      quantity,
-      unit,
-      loggedAt: nowTime,
-      dateIso: getLocalDateIso(),
-      computedNutrients: previewNutrients,
-      isUserLogged: true,
-    });
+    try {
+      const createdId = await onAddIntakeRecord({
+        foodId: selectedFood.id,
+        foodName: selectedFood.name,
+        category: selectedFood.category,
+        meal: selectedMeal,
+        quantity,
+        unit,
+        loggedAt: nowTime,
+        dateIso: getLocalDateIso(),
+        computedNutrients: previewNutrients,
+        isUserLogged: true,
+      });
 
-    setDeletedFeedback(null);
-    setAddedFeedback({
-      message: `Added ${quantity} ${unit} of ${selectedFood.name} (${previewNutrients.calories} kcal) to ${selectedMeal}.`,
-      recordId: createdId,
-    });
+      setDeletedFeedback(null);
+      setAddedFeedback({
+        message: `Added ${quantity} ${unit} of ${selectedFood.name} (${previewNutrients.calories} kcal) to ${selectedMeal}.`,
+        recordId: createdId,
+      });
+    } catch {
+      // Error banner handled by parent
+    }
   };
 
   const handleUndoAdd = () => {
@@ -747,7 +812,7 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
                             )}
                           </div>
                           {food.alternateNames && food.alternateNames.length > 0 && (
-                            <p className="text-[11px] text-slate-400 truncate">
+                            <p className="text-[11px] text-slate-500 truncate">
                               {food.alternateNames.slice(0, 3).join(' · ')}
                             </p>
                           )}
@@ -908,7 +973,7 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
               <label className="block text-xs font-semibold text-slate-700 mb-2">
                 Select Meal
               </label>
-              <div className="grid grid-cols-4 gap-2" role="group" aria-label="Select meal to log into">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="group" aria-label="Select meal to log into">
                 {Object.values(MealType).map((m) => (
                   <button
                     key={m}
@@ -1246,7 +1311,7 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
 
       {/* Food Comparison Modal */}
       <FoodComparisonModal
-        allFoods={foodCatalog}
+        allFoods={comparisonFoodPool}
         selectedFoodIds={comparisonFoodIds}
         isOpen={isComparisonOpen}
         onClose={() => setIsComparisonOpen(false)}

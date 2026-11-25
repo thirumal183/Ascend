@@ -494,7 +494,17 @@ class WorkoutService:
         ref_ids = {item.exerciseItemId for item in payload.setLogs if item.exerciseItemId is not None}
         if ref_ids:
             found_ids = set(
-                (await db.scalars(select(ExerciseItem.id).where(ExerciseItem.id.in_(ref_ids)))).all()
+                (
+                    await db.scalars(
+                        select(ExerciseItem.id).where(
+                            ExerciseItem.id.in_(ref_ids),
+                            or_(
+                                ExerciseItem.created_by_user_id.is_(None),
+                                ExerciseItem.created_by_user_id == current_user.id,
+                            ),
+                        )
+                    )
+                ).all()
             )
             missing = ref_ids - found_ids
             if missing:
@@ -502,8 +512,11 @@ class WorkoutService:
                     f"Referenced exercise item(s) not found: {sorted(str(x) for x in missing)}"
                 )
 
-        values_list = [
-            {
+        # Deduplicate by (exercise_name, set_number) keeping the latest entry so
+        # PostgreSQL ON CONFLICT DO UPDATE cannot raise CardinalityViolationError.
+        deduped_map: dict[tuple[str, int], dict] = {}
+        for item in payload.setLogs:
+            deduped_map[(item.exerciseName, item.setNumber)] = {
                 "workout_session_id": session_id,
                 "exercise_item_id": item.exerciseItemId,
                 "exercise_name": item.exerciseName,
@@ -514,8 +527,7 @@ class WorkoutService:
                 "actual_load_kg": Decimal(str(item.actualLoadKg)) if item.actualLoadKg is not None else None,
                 "completed": item.completed,
             }
-            for item in payload.setLogs
-        ]
+        values_list = list(deduped_map.values())
 
         insert_stmt = pg_insert(ExerciseSetLog).values(values_list)
         upsert_stmt = insert_stmt.on_conflict_do_update(

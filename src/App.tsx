@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { AscendLogo } from './components/brand/AscendLogo';
 import { StartupIntro } from './components/brand/StartupIntro';
@@ -15,6 +15,7 @@ import { DietManagementView } from './components/diet/DietManagementView';
 import { LandingPageView } from './components/landing/LandingPageView';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopHeader } from './components/layout/TopHeader';
+import type { FoodCategory } from './types/ascend';
 import type { DailyAdherenceItem } from './services/api/nutritionApi';
 import type { WorkoutSessionResponse } from './services/api/workoutApi';
 
@@ -95,7 +96,11 @@ const DEFAULT_UNAUTHENTICATED_ACCOUNT: UserAccount = {
 };
 
 export default function App() {
-  const savedSession = prototypeSessionStorage.load();
+  const rawSavedSession = prototypeSessionStorage.load();
+  const savedSession =
+    rawSavedSession && (rawSavedSession.usingDemoData || rawSavedSession.account?.isDemoAccount)
+      ? rawSavedSession
+      : null;
 
   const [userAccount, setUserAccount] = useState<UserAccount>(
     savedSession?.account ?? DEFAULT_UNAUTHENTICATED_ACCOUNT
@@ -164,7 +169,7 @@ export default function App() {
   const [onboardingSubmitting, setOnboardingSubmitting] = useState(false);
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [activeWorkoutSessionId, setActiveWorkoutSessionId] = useState<string | null>(null);
+  const [workoutSessionIdsByPlan, setWorkoutSessionIdsByPlan] = useState<Record<string, string>>({});
   const [liveIntakeReport, setLiveIntakeReport] = useState<DailyAdherenceItem[]>([]);
   const [liveWorkoutSessions, setLiveWorkoutSessions] = useState<WorkoutSessionResponse[]>([]);
   const [pendingAccount, setPendingAccount] = useState<{
@@ -208,7 +213,7 @@ export default function App() {
       setFoodCatalog([]);
       setChatMessages([]);
       setActiveConversationId(null);
-      setActiveWorkoutSessionId(null);
+      setWorkoutSessionIdsByPlan({});
       setWaterIntakeMl(0);
       setStepsToday(0);
 
@@ -260,8 +265,14 @@ export default function App() {
 
         // Overlay today's persisted set logs if a session exists
         if (sessionsRes.status === 'fulfilled' && sessionsRes.value.length > 0) {
+          const sessionMap: Record<string, string> = {};
+          for (const s of sessionsRes.value) {
+            if (s.workoutPlanId && !sessionMap[s.workoutPlanId]) {
+              sessionMap[s.workoutPlanId] = s.id;
+            }
+          }
+          setWorkoutSessionIdsByPlan(sessionMap);
           const latestSession = sessionsRes.value[0];
-          setActiveWorkoutSessionId(latestSession.id);
           try {
             const detail = await workoutApi.getSessionDetails(latestSession.id);
             for (const plan of hydratedPlans) {
@@ -330,17 +341,23 @@ export default function App() {
         setShowLandingPage(false);
 
         await hydrateLiveDomainData();
-      } catch (err) {
+      } catch {
         clearStoredTokens();
+        setUserAccount(DEFAULT_UNAUTHENTICATED_ACCOUNT);
+        setShowLandingPage(true);
       }
     };
 
     recoverLiveSession();
   }, []);
 
-  // Persist session changes to localStorage (without passwords)
+  // Persist demo workspace changes to localStorage only (never persist live user PII/state)
   useEffect(() => {
-    if (userAccount.isAuthenticated && userAccount.onboardingCompleted) {
+    if (
+      userAccount.isAuthenticated &&
+      userAccount.onboardingCompleted &&
+      (usingDemoData || userAccount.isDemoAccount)
+    ) {
       prototypeSessionStorage.save({
         account: userAccount,
         userProfile,
@@ -469,9 +486,7 @@ export default function App() {
     userProfile?: UserProfile;
     goals?: NutritionGoals;
   }) => {
-    const isDemo =
-      account.email.toLowerCase().includes('demo') ||
-      account.email === 'alex.rivera@ascend.app';
+    const isDemo = account.email.toLowerCase() === 'alex.rivera@ascend.app';
 
     const authedAccount: UserAccount = {
       name: account.name,
@@ -494,7 +509,7 @@ export default function App() {
       setFoodCatalog([]);
       setChatMessages([]);
       setActiveConversationId(null);
-      setActiveWorkoutSessionId(null);
+      setWorkoutSessionIdsByPlan({});
       setWaterIntakeMl(0);
       setStepsToday(0);
 
@@ -544,8 +559,14 @@ export default function App() {
             .map((r) => mapBackendWorkoutPlanToFrontend(r.value));
 
           if (sessionsRes.status === 'fulfilled' && sessionsRes.value.length > 0) {
+            const sessionMap: Record<string, string> = {};
+            for (const s of sessionsRes.value) {
+              if (s.workoutPlanId && !sessionMap[s.workoutPlanId]) {
+                sessionMap[s.workoutPlanId] = s.id;
+              }
+            }
+            setWorkoutSessionIdsByPlan(sessionMap);
             const latestSession = sessionsRes.value[0];
-            setActiveWorkoutSessionId(latestSession.id);
             try {
               const detail = await workoutApi.getSessionDetails(latestSession.id);
               for (const plan of hydratedPlans) {
@@ -763,7 +784,7 @@ export default function App() {
   };
 
   // Diet Management Handlers
-  const handleAddIntakeRecord = (record: Omit<IntakeRecord, 'id'>): string => {
+  const handleAddIntakeRecord = async (record: Omit<IntakeRecord, 'id'>): Promise<string> => {
     const tempId = `intake-${Date.now()}`;
     const newRecord: IntakeRecord = {
       ...record,
@@ -772,27 +793,27 @@ export default function App() {
     setIntakeRecords((prev) => [...prev, newRecord]);
 
     if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
-      nutritionApi
-        .logIntake({
+      try {
+        const created = await nutritionApi.logIntake({
           foodId: record.foodId,
           meal: record.meal as any,
           quantity: record.quantity,
           unit: record.unit as any,
           dateIso: record.dateIso || getLocalDateIso(),
-        })
-        .then((created) => {
-          const mapped = mapBackendIntakeRecordToFrontend(created);
-          setIntakeRecords((prev) =>
-            prev.map((r) => (r.id === tempId ? mapped : r))
-          );
-        })
-        .catch((err: any) => {
-          setIntakeRecords((prev) => prev.filter((r) => r.id !== tempId));
-          setGlobalBanner({
-            type: 'error',
-            message: `Failed to save meal to server: ${err.message}`,
-          });
         });
+        const mapped = mapBackendIntakeRecordToFrontend(created);
+        setIntakeRecords((prev) =>
+          prev.map((r) => (r.id === tempId ? mapped : r))
+        );
+        return mapped.id;
+      } catch (err: any) {
+        setIntakeRecords((prev) => prev.filter((r) => r.id !== tempId));
+        setGlobalBanner({
+          type: 'error',
+          message: `Failed to save meal to server: ${err.message}`,
+        });
+        throw err;
+      }
     }
 
     return tempId;
@@ -947,7 +968,7 @@ export default function App() {
   const persistWorkoutPlanState = async (plan: WorkoutPlan) => {
     if (usingDemoData || !userAccount.isAuthenticated || userAccount.isDemoAccount) return;
     try {
-      let sessionId = activeWorkoutSessionId;
+      let sessionId = workoutSessionIdsByPlan[plan.id];
       const todayIso = getLocalDateIso();
       if (!sessionId) {
         const created = await workoutApi.createSession({
@@ -959,7 +980,7 @@ export default function App() {
           completed: plan.exercises.length > 0 && plan.exercises.every((e) => e.completed),
         });
         sessionId = created.id;
-        setActiveWorkoutSessionId(sessionId);
+        setWorkoutSessionIdsByPlan((prev) => ({ ...prev, [plan.id]: sessionId! }));
       }
 
       const setPayloads = plan.exercises.flatMap((ex) => {
@@ -997,32 +1018,42 @@ export default function App() {
 
   // Workout Handlers
   const handleToggleExercise = (workoutId: string, exerciseId: string) => {
-    let updatedPlan: WorkoutPlan | undefined;
-    setWorkoutPlans((prev) =>
-      prev.map((plan) => {
-        if (plan.id !== workoutId) return plan;
-        const nextPlan: WorkoutPlan = {
-          ...plan,
-          exercises: plan.exercises.map((ex) => {
-            if (ex.id !== exerciseId) return ex;
-            const nextCompleted = !ex.completed;
-            const updatedSets = ex.completedSets
-              ? ex.completedSets.map((s) => ({ ...s, completed: nextCompleted }))
-              : undefined;
-            return {
-              ...ex,
-              completed: nextCompleted,
-              completedSets: updatedSets,
-            };
-          }),
+    const targetPlan = workoutPlans.find((p) => p.id === workoutId);
+    if (!targetPlan) return;
+    const nextPlan: WorkoutPlan = {
+      ...targetPlan,
+      exercises: targetPlan.exercises.map((ex) => {
+        if (ex.id !== exerciseId) return ex;
+        const nextCompleted = !ex.completed;
+        const updatedSets = ex.completedSets
+          ? ex.completedSets.map((s) => ({ ...s, completed: nextCompleted }))
+          : undefined;
+        return {
+          ...ex,
+          completed: nextCompleted,
+          completedSets: updatedSets,
         };
-        updatedPlan = nextPlan;
-        return nextPlan;
-      })
-    );
-    if (updatedPlan) {
-      void persistWorkoutPlanState(updatedPlan);
-    }
+      }),
+    };
+    setWorkoutPlans((prev) => prev.map((p) => (p.id === workoutId ? nextPlan : p)));
+    void persistWorkoutPlanState(nextPlan);
+  };
+
+  const handleResetWorkoutPlan = (workoutId: string) => {
+    const targetPlan = workoutPlans.find((p) => p.id === workoutId);
+    if (!targetPlan) return;
+    const nextPlan: WorkoutPlan = {
+      ...targetPlan,
+      exercises: targetPlan.exercises.map((ex) => ({
+        ...ex,
+        completed: false,
+        completedSets: ex.completedSets
+          ? ex.completedSets.map((s) => ({ ...s, completed: false }))
+          : undefined,
+      })),
+    };
+    setWorkoutPlans((prev) => prev.map((p) => (p.id === workoutId ? nextPlan : p)));
+    void persistWorkoutPlanState(nextPlan);
   };
 
   const handleUpdateExerciseSets = async (
@@ -1030,26 +1061,19 @@ export default function App() {
     exerciseId: string,
     sets: ExerciseSetLog[]
   ) => {
+    const targetPlan = workoutPlans.find((p) => p.id === workoutId);
+    if (!targetPlan) return;
     const allCompleted = sets.length > 0 && sets.every((s) => s.completed);
-    let updatedPlan: WorkoutPlan | undefined;
-    setWorkoutPlans((prev) =>
-      prev.map((plan) => {
-        if (plan.id !== workoutId) return plan;
-        const nextPlan: WorkoutPlan = {
-          ...plan,
-          exercises: plan.exercises.map((ex) =>
-            ex.id === exerciseId
-              ? { ...ex, completed: allCompleted, completedSets: sets }
-              : ex
-          ),
-        };
-        updatedPlan = nextPlan;
-        return nextPlan;
-      })
-    );
-    if (updatedPlan) {
-      await persistWorkoutPlanState(updatedPlan);
-    }
+    const nextPlan: WorkoutPlan = {
+      ...targetPlan,
+      exercises: targetPlan.exercises.map((ex) =>
+        ex.id === exerciseId
+          ? { ...ex, completed: allCompleted, completedSets: sets }
+          : ex
+      ),
+    };
+    setWorkoutPlans((prev) => prev.map((p) => (p.id === workoutId ? nextPlan : p)));
+    await persistWorkoutPlanState(nextPlan);
   };
 
   const handleAddExercise = async (
@@ -1296,8 +1320,11 @@ export default function App() {
     }));
   };
 
-  // Toggle between Clean Personal Log and Sample Demo Data
+  // Toggle between Clean Personal Log and Sample Demo Data (demo accounts only)
   const handleToggleDemoData = (loadDemo: boolean) => {
+    if (loadDemo && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
+      return;
+    }
     setUsingDemoData(loadDemo);
     if (loadDemo) {
       setIntakeRecords(INITIAL_TODAY_INTAKE);
@@ -1312,6 +1339,15 @@ export default function App() {
       setProgressHistory((prev) => prev.filter((r) => r.source === 'logged'));
     }
   };
+
+  const handleSearchFoods = useCallback(async (q: string, category: FoodCategory) => {
+    const res = await nutritionApi.searchFoods({
+      q: q || undefined,
+      category: category !== 'All' ? category : undefined,
+      limit: 50,
+    });
+    return res.items.map(mapBackendFoodItemToFrontend);
+  }, []);
 
   // AI Coach Message Handlers
   const handleAppendMessage = (msg: ChatMessage) => {
@@ -1521,6 +1557,8 @@ export default function App() {
                 intakeRecords={intakeRecords}
                 goals={goals}
                 initialMeal={preselectedMeal}
+                isLiveMode={!isDemoMode}
+                onSearchFoods={handleSearchFoods}
                 onAddIntakeRecord={handleAddIntakeRecord}
                 onUpdateIntakeRecord={handleUpdateIntakeRecord}
                 onDeleteIntakeRecord={handleDeleteIntakeRecord}
@@ -1534,6 +1572,7 @@ export default function App() {
                 workoutPlans={workoutPlans}
                 userPathway={userProfile.pathway}
                 onToggleExercise={handleToggleExercise}
+                onResetWorkoutPlan={handleResetWorkoutPlan}
                 onAddExercise={handleAddExercise}
                 onUpdateExerciseSets={handleUpdateExerciseSets}
               />
@@ -1545,7 +1584,7 @@ export default function App() {
                 goals={goals}
                 userProfile={userProfile}
                 onAddProgressRecord={handleAddProgressRecord}
-                onLoadDemoProgress={() => handleToggleDemoData(true)}
+                onLoadDemoProgress={isDemoMode ? () => handleToggleDemoData(true) : undefined}
               />
             )}
 
@@ -1626,10 +1665,6 @@ export default function App() {
           onConfirm={() => setPathwayModalOpen(false)}
           onBackToLanding={() => setPathwayModalOpen(false)}
         />
-      )}
-
-      {showStartupIntro && (
-        <StartupIntro onComplete={handleDismissStartupIntro} />
       )}
     </div>
   );

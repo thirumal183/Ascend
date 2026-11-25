@@ -326,58 +326,12 @@ export const FoodDetailsModal: React.FC<FoodDetailsModalProps> = ({
             </div>
           </div>
 
-          {/* Provenance & Licensing Information Card */}
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Data Provenance & Source Attribution
-              </h3>
+          {food.dataNote && (
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-start gap-2.5 text-xs text-slate-600">
+              <Info className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
+              <span>{food.dataNote}</span>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div>
-                <span className="text-slate-500 block">Primary Source</span>
-                <span className="font-semibold text-slate-800 block mt-0.5">
-                  {food.sourceProvenance?.sourceName || food.brandOrSource}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">Reference / Code</span>
-                <span className="font-mono text-slate-800 block mt-0.5">
-                  {food.sourceProvenance?.sourceId || 'ASCEND-REF-01'}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">
-                  Verification Status
-                </span>
-                <span className="font-medium text-emerald-700 block mt-0.5">
-                  {food.sourceProvenance?.verificationStatus ===
-                  'verified_reference'
-                    ? 'Verified Laboratory Reference'
-                    : food.sourceProvenance?.verificationStatus ===
-                        'packaged_label'
-                      ? 'Commercial Packaged Declaration'
-                      : 'Curated Demonstration Model'}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">License Model</span>
-                <span className="font-medium text-slate-800 block mt-0.5">
-                  {food.sourceProvenance?.licenseType ||
-                    'Curated Prototype / Demo'}
-                </span>
-              </div>
-            </div>
-
-            {food.dataNote && (
-              <div className="pt-2 border-t border-slate-200/60 flex items-start gap-2 text-xs text-slate-600">
-                <Info className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
-                <span>{food.dataNote}</span>
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Footer Actions */}

@@ -114,6 +114,12 @@ def map_food_item_response(food: FoodItem) -> FoodItemResponse:
         isCustomUserFood=food.is_custom_user_food,
         createdByUserId=food.created_by_user_id,
         dataNote=food.data_note,
+        sourceProvider=food.source_provider,
+        sourceExternalId=food.source_external_id,
+        licenseType=food.license_type,
+        verificationStatus=food.verification_status,
+        sourceAttribution=food.source_attribution,
+        barcode=food.barcode,
         nutrients=extract_core_nutrients(food),
         createdAt=food.created_at,
     )
@@ -242,6 +248,10 @@ class FoodService:
             is_custom_user_food=True,
             created_by_user_id=current_user.id,
             data_note=payload.dataNote,
+            source_provider="user_custom",
+            license_type="User-Private",
+            verification_status="user_entered",
+            source_attribution="User-entered custom food",
         )
         db.add(food)
         await db.flush()

@@ -301,8 +301,17 @@ class AuthService:
         db: AsyncSession,
         user: User,
         raw_refresh_token: Optional[str] = None,
+        logout_all: bool = False,
     ) -> None:
-        if raw_refresh_token:
+        if logout_all:
+            # Explicit global logout across all devices
+            await db.execute(
+                update(UserRefreshSession)
+                .where(UserRefreshSession.user_id == user.id)
+                .values(is_revoked=True)
+            )
+            user.jwt_version += 1
+        elif raw_refresh_token:
             current_hash = hash_refresh_token(raw_refresh_token)
             await db.execute(
                 update(UserRefreshSession)
@@ -312,14 +321,6 @@ class AuthService:
                 )
                 .values(is_revoked=True)
             )
-        else:
-            # Global logout across all devices
-            await db.execute(
-                update(UserRefreshSession)
-                .where(UserRefreshSession.user_id == user.id)
-                .values(is_revoked=True)
-            )
-            user.jwt_version += 1
 
         await db.commit()
 

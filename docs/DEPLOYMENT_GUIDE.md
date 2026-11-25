@@ -36,8 +36,19 @@ Using Vercel's same-origin proxy (`/api/*` -> `/api/proxy.ts`) keeps `ascend_ref
 3. Keep the **Direct** (non-pooler) connection string separately for manual `pg_dump` backups.
 4. `backend/app/core/config.py` automatically strips `sslmode` / `channel_binding` from `async_database_uri` for `asyncpg` and sets `ssl="require"` and `statement_cache_size=0` when `-pooler` is detected.
 
-### Pre-Launch Database Note
-- The development Neon database currently holds test-generated public `food_items` and `workout_plans` rows from earlier `pytest` runs. Before opening a production instance to end users, seed curated food items and pathway workout templates cleanly and avoid running `pytest` against the production `DATABASE_URL`.
+### Pre-Launch Database Seeding & Official Food Ingestion
+Before opening a production Neon instance to end users:
+1. Run `alembic upgrade head` against the production database (Render runs this automatically on deploy, or run manually from `backend/`).
+2. Download official datasets locally into `backend/data/raw/` (gitignored; never commit raw archives):
+   - **USDA FoodData Central** (Foundation Foods + SR Legacy JSON zips from `https://fdc.nal.usda.gov/download-datasets`)
+   - **Open Food Facts** (optional packaged Indian/regional JSON/JSONL/tar.gz exports from `https://world.openfoodfacts.org/data` — ODbL 1.0)
+3. Run the idempotent ingestion CLI from `backend/` targeting Neon (`--target-db production --confirm-production` safety gate required):
+   - `python -m app.db.ingest.cli import-usda --file data/raw/<foundation.zip> --target-db production --confirm-production`
+   - `python -m app.db.ingest.cli import-usda --file data/raw/<sr_legacy.zip> --target-db production --confirm-production`
+   - `python -m app.db.ingest.cli import-recipes --target-db production --confirm-production`
+   - `python -m app.db.ingest.cli seed-workouts --target-db production --confirm-production`
+   - `python -m app.db.ingest.cli verify-counts --target-db production --confirm-production`
+4. Never run `pytest` against the production `DATABASE_URL`. See [FOOD_DATA_PROVENANCE_AND_INGESTION.md](./FOOD_DATA_PROVENANCE_AND_INGESTION.md) for dataset rules and licensing isolation.
 
 ---
 

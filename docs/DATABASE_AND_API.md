@@ -22,7 +22,7 @@ For full DDL, Mermaid ER diagrams, JSON payloads, and security sequence diagrams
 
 ### Domain 2: Nutrition, Food Catalog & Hydration (Pure 3NF)
 - **`nutrients`**: Canonical INFOODS/USDA nutrient definitions (`ENERC_KCAL`, `PROCNT`, `CHOCDF`, `FAT`, `FIBTG`, `SUGAR`, `NA`, `K`, `CA`, `FE`).
-- **`food_items`**: Metadata (`name`, `alternate_names` with `pg_trgm` GIN search support, `brand_or_source`, `category`, `preparation_state`, `reference_quantity`, `reference_unit`, `grams_per_serving`, `is_custom_user_food`, `created_by_user_id` FK). Contains **zero duplicated macro columns**.
+- **`food_items`**: Metadata (`name`, `alternate_names` with `pg_trgm` GIN search support, `brand_or_source`, `category`, `preparation_state`, `reference_quantity`, `reference_unit`, `grams_per_serving`, `is_custom_user_food`, `created_by_user_id` FK) plus **source provenance metadata** (`source_provider`, `source_external_id`, `license_type`, `verification_status`, `source_attribution`, `barcode`, `import_batch_id`, `updated_at`) enforced by check constraints and partial unique index `uq_food_items_source_identity` on `(source_provider, source_external_id) WHERE is_custom_user_food = false AND source_external_id IS NOT NULL`. Contains **zero duplicated macro columns**.
 - **`food_nutrients`**: Composite PK `(food_id, nutrient_id)` storing `amount_per_reference_qty`. Only measured nutrients have rows, preserving `null` for unmeasured micronutrients.
 - **`v_food_items_with_nutrients`**: Read view joining `food_items` with core nutrients.
 - **`intake_records`**: User meal logs (`user_id` FK, `food_id` FK `ON DELETE SET NULL`, `meal`, `date_logged`, `quantity`, `unit`) with **immutable frozen nutrient snapshots** (`computed_calories`, `computed_protein_g`, `computed_carbs_g`, `computed_fat_g`, `computed_fiber_g`, `computed_sodium_mg`).
@@ -49,7 +49,8 @@ For full DDL, Mermaid ER diagrams, JSON payloads, and security sequence diagrams
 | :--- | :--- |
 | `254b250445d3` | Initial schema: 15 core entities + `v_food_items_with_nutrients` + `pg_trgm` extension |
 | `9c4f8a2b1d7e` | Added `workout_plans.created_by_user_id` FK (`ON DELETE CASCADE`) for custom plan ownership |
-| `d4e5f6a7b8c9` *(head)* | Added `water_intake_records` table and `exercise_items.created_by_user_id` FK (`ON DELETE CASCADE`) |
+| `d4e5f6a7b8c9` | Added `water_intake_records` table and `exercise_items.created_by_user_id` FK (`ON DELETE CASCADE`) |
+| `e7f8a9b0c1d2` *(head)* | Added food provenance columns (`source_provider`, `source_external_id`, `license_type`, `verification_status`, `source_attribution`, `barcode`, `import_batch_id`, `updated_at`), check constraints, and partial unique index `uq_food_items_source_identity` |
 
 ---
 

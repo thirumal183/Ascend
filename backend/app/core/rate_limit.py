@@ -61,11 +61,21 @@ class SlidingWindowLimiter:
 rate_limiter = SlidingWindowLimiter()
 
 
+def resolve_client_ip(request: Request) -> str:
+    """Resolve client IP behind trusted Vercel/Render reverse proxies safely."""
+    forwarded = request.headers.get("x-vercel-forwarded-for") or request.headers.get("x-forwarded-for")
+    if forwarded:
+        first_hop = forwarded.split(",")[0].strip()
+        if first_hop:
+            return first_hop
+    return request.client.host if request.client else "unknown"
+
+
 def rate_limit(scope: str, max_requests: int, window_seconds: int = 60) -> Callable:
     """FastAPI dependency factory enforcing a per-IP sliding window limit."""
 
     async def _dependency(request: Request) -> None:
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = resolve_client_ip(request)
         key = f"{scope}:{client_ip}"
         await rate_limiter.check(key=key, max_requests=max_requests, window_seconds=window_seconds)
 

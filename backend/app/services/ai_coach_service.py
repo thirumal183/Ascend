@@ -315,15 +315,19 @@ class AICoachService:
             db.add(conversation)
             await db.flush()
 
-        # Load prior conversation turns for multi-turn Gemini context
-        prior_msgs = (
-            await db.scalars(
-                select(ChatMessage)
-                .where(ChatMessage.conversation_id == conversation.id)
-                .order_by(ChatMessage.created_at.asc())
-                .limit(10)
+        # Load most recent prior conversation turns for multi-turn Gemini context
+        prior_msgs = list(
+            reversed(
+                (
+                    await db.scalars(
+                        select(ChatMessage)
+                        .where(ChatMessage.conversation_id == conversation.id)
+                        .order_by(ChatMessage.created_at.desc())
+                        .limit(10)
+                    )
+                ).all()
             )
-        ).all()
+        )
         gemini_history = [
             {
                 "role": "model" if m.role == "assistant" else "user",

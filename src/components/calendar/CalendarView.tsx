@@ -172,7 +172,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold text-slate-500 pb-2">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-[11px] sm:text-xs font-semibold text-slate-500 pb-2">
             <div>Mon</div>
             <div>Tue</div>
             <div>Wed</div>
@@ -182,9 +182,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             <div>Sun</div>
           </div>
 
-          <div className="grid grid-cols-7 gap-2">
+          <div className="grid grid-cols-7 gap-1 sm:gap-2">
             {Array.from({ length: leadingEmptyDays }).map((_, idx) => (
-              <div key={`empty-${idx}`} aria-hidden="true" className="min-h-[82px] rounded-xl bg-slate-50/30" />
+              <div key={`empty-${idx}`} aria-hidden="true" className="min-h-[60px] sm:min-h-[82px] rounded-xl bg-slate-50/30" />
             ))}
             {monthDays.map((entry) => {
               const isSelected = selectedDay.dayNumber === entry.dayNumber;
@@ -195,7 +195,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   onClick={() => setSelectedDayNumber(entry.dayNumber)}
                   aria-label={`${currentMonthName} ${entry.dayNumber}, ${entry.calories ? `${entry.calories} calories logged` : 'Scheduled day'}`}
                   aria-pressed={isSelected}
-                  className={`p-2.5 rounded-xl border text-left transition-all min-h-[82px] flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] ${
+                  className={`p-1.5 sm:p-2.5 rounded-xl border text-left transition-all min-h-[60px] sm:min-h-[82px] flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] ${
                     isSelected
                       ? 'bg-blue-50 border-[#2563EB] ring-2 ring-[#2563EB]/20 shadow-xs'
                       : entry.isToday
@@ -221,13 +221,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   </div>
 
                   {entry.adherenceStatus === 'upcoming' ? (
-                    <div className="mt-2 text-[10px] text-slate-400">Scheduled</div>
+                    <div className="mt-1 sm:mt-2 text-[10px] text-slate-500 hidden sm:block">Scheduled</div>
                   ) : entry.adherenceStatus === 'unlogged' ? (
-                    <div className="mt-2 text-[10px] text-slate-400">No logs</div>
+                    <div className="mt-1 sm:mt-2 text-[10px] text-slate-500 hidden sm:block">No logs</div>
                   ) : (
-                    <div className="mt-2 font-mono text-[10px] leading-tight">
-                      <div className="font-bold">{entry.calories} kcal</div>
-                      <div className="opacity-75">{entry.proteinG}g pro</div>
+                    <div className="mt-1 sm:mt-2 font-mono text-[9px] sm:text-[10px] leading-tight">
+                      <div className="font-bold truncate">{entry.calories}<span className="hidden sm:inline"> kcal</span></div>
+                      <div className="opacity-75 hidden sm:block">{entry.proteinG}g pro</div>
                     </div>
                   )}
                 </button>
