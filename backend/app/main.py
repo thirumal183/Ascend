@@ -47,7 +47,7 @@ def create_application() -> FastAPI:
             allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
             allow_credentials=True,
             allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            allow_headers=["Authorization", "Content-Type", "Accept"],
+            allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
         )
 
     # Request Size Guard Middleware (protects free-tier RAM from oversized payloads)

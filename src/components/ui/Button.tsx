@@ -46,25 +46,25 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const getPathwayClasses = () => {
       switch (pathway) {
         case OnboardingPathway.AthletePerformance:
-          return 'bg-sky-600 hover:bg-sky-700 text-white shadow-sky-600/20';
+          return 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-blue-900/15';
         case OnboardingPathway.MuscleGain:
-          return 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/20';
+          return 'bg-[#EA580C] hover:bg-[#C2410C] text-white shadow-orange-900/15';
         case OnboardingPathway.GeneralFitness:
         default:
-          return 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20';
+          return 'bg-[#15803D] hover:bg-[#166534] text-white shadow-emerald-950/15';
       }
     };
 
     // Variant tokens
     const variantClasses = {
       primary:
-        'bg-slate-900 hover:bg-slate-800 text-white shadow-xs active:scale-[0.98]',
+        'bg-[#0A1628] hover:bg-[#142744] text-white shadow-xs active:scale-[0.98]',
       secondary:
-        'bg-slate-100 hover:bg-slate-200/80 text-slate-800 active:scale-[0.98]',
+        'bg-slate-100 hover:bg-slate-200/80 text-slate-900 active:scale-[0.98]',
       outline:
-        'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/80 hover:border-slate-300 shadow-2xs active:scale-[0.98]',
+        'bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 hover:border-slate-300 shadow-2xs active:scale-[0.98]',
       ghost:
-        'bg-transparent hover:bg-slate-100/80 text-slate-600 hover:text-slate-900',
+        'bg-transparent hover:bg-slate-100 text-slate-700 hover:text-slate-950',
       destructive:
         'bg-rose-600 hover:bg-rose-700 text-white shadow-xs active:scale-[0.98]',
       pathway: `${getPathwayClasses()} shadow-xs active:scale-[0.98]`,
@@ -74,7 +74,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={disabled || isLoading}
-        className={`inline-flex items-center justify-center font-sans transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 ${sizeClasses} ${variantClasses} ${className}`}
+        className={`inline-flex items-center justify-center font-sans transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 ${sizeClasses} ${variantClasses} ${className}`}
         {...props}
       >
         {isLoading ? (

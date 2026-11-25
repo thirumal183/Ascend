@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from decimal import Decimal
 from typing import Annotated
 
@@ -11,7 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import get_current_user
 from app.core.database import get_db
-from app.core.exceptions import EntityNotFoundException
+from app.core.exceptions import (
+    AccessForbiddenException,
+    AuthenticationException,
+    EntityNotFoundException,
+)
+from app.core.rate_limit import rate_limit
+from app.core.security import verify_password
 from app.models.enums import ActivityLevel, BiologicalSex, GoalType, PathwayType
 from app.models.user import NutritionGoal, User, UserProfile
 from app.schemas.auth import NutritionGoalResponse, UserProfileResponse
@@ -118,8 +125,10 @@ async def update_my_profile(
 
     if payload.fullName is not None:
         current_user.full_name = payload.fullName.strip()
-    if payload.pathway is not None:
-        profile.pathway = payload.pathway.value
+    if payload.pathway is not None and payload.pathway.value != profile.pathway:
+        raise AccessForbiddenException(
+            "Pathway changes require password confirmation via Settings."
+        )
     if payload.archetype is not None:
         profile.archetype = payload.archetype.value
     if payload.goalType is not None:
@@ -158,13 +167,18 @@ async def update_my_profile(
     "/me/pathway",
     response_model=UserProfileAndGoalsResponse,
     status_code=status.HTTP_200_OK,
-    summary="Switch active pathway and configure baseline targets",
+    dependencies=[Depends(rate_limit("users_pathway_change", max_requests=10, window_seconds=60))],
+    summary="Switch active pathway with current password confirmation",
 )
 async def switch_my_pathway(
     payload: SwitchPathwayRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserProfileAndGoalsResponse:
+    is_valid = await asyncio.to_thread(verify_password, payload.currentPassword, current_user.password_hash)
+    if not is_valid:
+        raise AuthenticationException("Current password is incorrect.")
+
     profile, goals = await _load_profile_and_goals(db, current_user.id)
 
     profile.pathway = payload.pathway.value

@@ -18,7 +18,7 @@ from app.models.enums import (
     UnitSystem,
     WorkoutIntensity,
 )
-from app.models.nutrition import FoodItem, FoodNutrient, IntakeRecord, Nutrient
+from app.models.nutrition import FoodItem, FoodNutrient, IntakeRecord, Nutrient, WaterIntakeRecord
 from app.models.progress import ProgressRecord
 from app.models.user import NutritionGoal, User, UserProfile, UserRefreshSession
 from app.models.views import (

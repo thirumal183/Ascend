@@ -176,19 +176,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header with Brand & Close */}
-        <div className="p-6 pb-4 border-b border-slate-100 flex items-center justify-between gap-4 bg-gradient-to-r from-slate-50 via-white to-sky-50/20">
+        <div className="p-6 pb-4 border-b border-slate-100 flex items-center justify-between gap-4 bg-slate-50">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-xl bg-[#0B1221] flex items-center justify-center text-sky-400 font-bold font-mono text-sm shadow-xs">
+            <div className="h-9 w-9 rounded-xl bg-[#0A1628] flex items-center justify-center text-blue-300 font-bold font-mono text-sm shadow-xs">
               ▲
             </div>
             <div>
               <h2
                 id="auth-modal-title"
-                className="text-base font-bold font-display text-slate-900 leading-tight"
+                className="text-base font-bold font-display text-[#0A1628] leading-tight"
               >
                 ASCEND
               </h2>
-              <p className="text-[11px] text-slate-500 font-medium">
+              <p className="text-[11px] text-[#2563EB] font-semibold">
                 Getting Better Every Day.
               </p>
             </div>
@@ -244,10 +244,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               )}
 
               {showForgotNotice && (
-                <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-800 text-xs flex items-start gap-2 animate-fade-in">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-sky-600" />
+                <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-[#0A1628] text-xs flex items-start gap-2 animate-fade-in">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-[#2563EB]" />
                   <span>
-                    In prototype mode, passwords are not stored on a remote server. You can sign in directly or register a new local session.
+                    Automated email password recovery is not configured in this deployment. Contact your administrator or register a new account.
                   </span>
                 </div>
               )}
@@ -417,17 +417,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 onClose();
                 onExploreDemo();
               }}
-              className="w-full py-2.5 px-3 rounded-xl border border-sky-200/80 bg-sky-50/60 hover:bg-sky-50 text-sky-800 text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+              className="w-full py-2.5 px-3 rounded-xl border border-blue-200 bg-blue-50/75 hover:bg-blue-50 text-[#1D4ED8] text-xs font-semibold flex items-center justify-center gap-2 transition-all"
             >
-              <Sparkles className="h-3.5 w-3.5 text-sky-600" />
+              <Sparkles className="h-3.5 w-3.5 text-[#2563EB]" />
               <span>Explore Instant Demo Mode (No signup required)</span>
             </button>
 
-            {/* Client-Side Prototype Security Notice */}
-            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-500 leading-relaxed flex items-start gap-2">
-              <Lock className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
+            {/* Session Security Notice */}
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600 leading-relaxed flex items-start gap-2">
+              <Lock className="h-3.5 w-3.5 text-[#2563EB] shrink-0 mt-0.5" />
               <span>
-                <strong className="text-slate-700">Client-Side Prototype Security:</strong> Passwords are used strictly for local session validation and are never transmitted, logged, or persisted to disk. Full OAuth2/JWT security will be handled by the production FastAPI backend.
+                <strong className="text-[#0A1628]">Session Security:</strong> Accounts use Argon2id password hashing, memory-only access tokens, and rotating HttpOnly cookies.
               </span>
             </div>
           </div>

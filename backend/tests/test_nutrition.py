@@ -451,3 +451,74 @@ async def test_historical_adherence_reports(async_client: AsyncClient):
     assert "calorieDelta" in today_item
     assert "compliant" in today_item
     assert today_item["targetCalories"] > 0
+
+
+@pytest.mark.asyncio
+async def test_water_intake_crud_daily_aggregation_and_isolation(async_client: AsyncClient):
+    """Verifies water intake CRUD, daily totals aggregation, and strict cross-user isolation."""
+    user_a = await create_test_user_and_token(async_client, "water_a")
+    user_b = await create_test_user_and_token(async_client, "water_b")
+    headers_a = {"Authorization": f"Bearer {user_a['tokens']['accessToken']}"}
+    headers_b = {"Authorization": f"Bearer {user_b['tokens']['accessToken']}"}
+
+    today_iso = date.today().isoformat()
+
+    # 1. User A logs two water entries
+    res1 = await async_client.post(
+        "/api/v1/intake/water",
+        json={"amountMl": 500, "dateIso": today_iso, "notes": "Morning hydration"},
+        headers=headers_a,
+    )
+    assert res1.status_code == 201
+    entry1 = res1.json()
+    assert entry1["amountMl"] == 500
+
+    res2 = await async_client.post(
+        "/api/v1/intake/water",
+        json={"amountMl": 250, "dateIso": today_iso},
+        headers=headers_a,
+    )
+    assert res2.status_code == 201
+    entry2 = res2.json()
+
+    # 2. Daily water & daily intake totals reflect 750ml
+    water_daily = await async_client.get(f"/api/v1/intake/water?date_iso={today_iso}", headers=headers_a)
+    assert water_daily.status_code == 200
+    assert water_daily.json()["totalMl"] == 750
+    assert len(water_daily.json()["records"]) == 2
+
+    intake_daily = await async_client.get(f"/api/v1/intake/daily?date_iso={today_iso}", headers=headers_a)
+    assert intake_daily.status_code == 200
+    assert intake_daily.json()["dailyTotals"]["waterMl"] == 750
+    assert intake_daily.json()["dailyTotals"]["waterTargetMl"] > 0
+
+    # 3. User B sees 0ml and cannot modify or delete User A's water entry
+    water_b = await async_client.get(f"/api/v1/intake/water?date_iso={today_iso}", headers=headers_b)
+    assert water_b.status_code == 200
+    assert water_b.json()["totalMl"] == 0
+
+    upd_b = await async_client.put(
+        f"/api/v1/intake/water/{entry1['id']}",
+        json={"amountMl": 999},
+        headers=headers_b,
+    )
+    assert upd_b.status_code == 403
+
+    del_b = await async_client.delete(f"/api/v1/intake/water/{entry1['id']}", headers=headers_b)
+    assert del_b.status_code == 403
+
+    # 4. User A updates entry2 to 400ml and deletes entry1 -> total 400ml
+    upd_a = await async_client.put(
+        f"/api/v1/intake/water/{entry2['id']}",
+        json={"amountMl": 400, "notes": "Adjusted"},
+        headers=headers_a,
+    )
+    assert upd_a.status_code == 200
+    assert upd_a.json()["amountMl"] == 400
+
+    del_a = await async_client.delete(f"/api/v1/intake/water/{entry1['id']}", headers=headers_a)
+    assert del_a.status_code == 204
+
+    after_daily = await async_client.get(f"/api/v1/intake/water?date_iso={today_iso}", headers=headers_a)
+    assert after_daily.status_code == 200
+    assert after_daily.json()["totalMl"] == 400

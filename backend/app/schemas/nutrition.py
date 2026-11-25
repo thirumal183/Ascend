@@ -171,6 +171,7 @@ class DailyTotalsResponse(BaseModel):
     fiberG: Optional[float] = None
     sodiumMg: Optional[float] = None
     waterMl: int = 0
+    waterTargetMl: int = 2500
 
 
 class DailyIntakeResponse(BaseModel):
@@ -208,3 +209,47 @@ class IntakeReportResponse(BaseModel):
 
     days: int
     report: List[DailyAdherenceItem]
+
+
+class CreateWaterIntakeRequest(BaseModel):
+    """Payload to log a water intake entry."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    amountMl: int = Field(..., gt=0, le=5000)
+    dateIso: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    notes: Optional[str] = Field(default=None, max_length=255)
+
+
+class UpdateWaterIntakeRequest(BaseModel):
+    """Payload to update an existing water intake entry."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    amountMl: int = Field(..., gt=0, le=5000)
+    notes: Optional[str] = Field(default=None, max_length=255)
+
+
+class WaterIntakeRecordResponse(BaseModel):
+    """Water intake record projection."""
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: uuid.UUID
+    userId: uuid.UUID
+    amountMl: int
+    dateLogged: str
+    loggedAt: str
+    notes: Optional[str] = None
+    createdAt: datetime
+
+
+class DailyWaterResponse(BaseModel):
+    """Single-day hydration summary and entry list."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    dateIso: str
+    totalMl: int
+    targetMl: int
+    records: List[WaterIntakeRecordResponse]

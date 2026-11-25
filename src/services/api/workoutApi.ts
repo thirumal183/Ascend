@@ -15,6 +15,7 @@ export interface ExerciseItemResponse {
   restSeconds: number;
   notes?: string | null;
   sortOrder: number;
+  createdByUserId?: string | null;
 }
 
 export interface WorkoutPlanResponse {
@@ -147,6 +148,32 @@ export const workoutApi = {
   async listExercises(muscleGroup?: string): Promise<ExerciseItemResponse[]> {
     const qs = muscleGroup ? `?muscle_group=${encodeURIComponent(muscleGroup)}` : '';
     return apiClient<ExerciseItemResponse[]>(`/workouts/exercises${qs}`);
+  },
+
+  async addExerciseToPlan(
+    planId: string,
+    payload: CreateExerciseItemPayload,
+  ): Promise<ExerciseItemResponse> {
+    return apiClient<ExerciseItemResponse>(`/workouts/plans/${planId}/exercises`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateExercise(
+    exerciseId: string,
+    payload: Partial<CreateExerciseItemPayload>,
+  ): Promise<ExerciseItemResponse> {
+    return apiClient<ExerciseItemResponse>(`/workouts/exercises/${exerciseId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteExercise(exerciseId: string): Promise<void> {
+    await apiClient<void>(`/workouts/exercises/${exerciseId}`, {
+      method: 'DELETE',
+    });
   },
 
   async createSession(payload: CreateWorkoutSessionPayload): Promise<WorkoutSessionResponse> {

@@ -66,6 +66,16 @@ def calculate_baseline_nutrition(payload: UserRegisterRequest) -> tuple[int, Dec
     return cals, prot, carbs, fat, water
 
 
+_DUMMY_PASSWORD_HASH: Optional[str] = None
+
+
+def _get_dummy_password_hash() -> str:
+    global _DUMMY_PASSWORD_HASH
+    if _DUMMY_PASSWORD_HASH is None:
+        _DUMMY_PASSWORD_HASH = hash_password("ascend-timing-equalizer")
+    return _DUMMY_PASSWORD_HASH
+
+
 class AuthService:
     """Manages credential validation, token rotation, and multi-device sessions."""
 
@@ -173,7 +183,12 @@ class AuthService:
         normalized_email = username.strip().lower()
         user = await db.scalar(select(User).where(User.email == normalized_email))
 
-        if not user or not await asyncio.to_thread(verify_password, password, user.password_hash):
+        if not user:
+            # Equalize Argon2id verification latency to prevent timing-based email enumeration
+            await asyncio.to_thread(verify_password, password, _get_dummy_password_hash())
+            raise AuthenticationException("Invalid email or password.")
+
+        if not await asyncio.to_thread(verify_password, password, user.password_hash):
             raise AuthenticationException("Invalid email or password.")
 
         if not user.is_active:

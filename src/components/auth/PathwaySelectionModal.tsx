@@ -137,19 +137,19 @@ export const PathwaySelectionModal: React.FC<PathwaySelectionModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-6 pb-4 border-b border-slate-100 flex items-start justify-between gap-4 bg-gradient-to-r from-slate-50 via-white to-sky-50/20">
+        <div className="p-6 pb-4 border-b border-slate-100 flex items-start justify-between gap-4 bg-slate-50">
           <div className="space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-sky-600">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#2563EB]">
               Step 1 of 2 · Choose Your Discipline
             </span>
             <h2
               id="pathway-modal-title"
-              className="text-xl sm:text-2xl font-bold font-display text-slate-900 tracking-tight"
+              className="text-xl sm:text-2xl font-bold font-display text-[#0A1628] tracking-tight"
             >
               Select Your Primary ASCEND Pathway
             </h2>
-            <p className="text-xs text-slate-500">
-              Personalizes your dashboard priorities, workout recommendations, and nutrition targets. You can switch pathways anytime in settings without losing records.
+            <p className="text-xs text-slate-600">
+              Personalizes your dashboard priorities, training recommendations, and nutrition targets. You can update this later in Settings with password confirmation.
             </p>
           </div>
 

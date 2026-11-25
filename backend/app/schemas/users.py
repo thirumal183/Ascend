@@ -30,11 +30,12 @@ class UpdateUserProfileRequest(BaseModel):
 
 
 class SwitchPathwayRequest(BaseModel):
-    """Pathway switch and optional macro/calorie target override payload."""
+    """Pathway switch and optional macro/calorie target override payload requiring password confirmation."""
 
     model_config = ConfigDict(populate_by_name=True)
 
     pathway: PathwayType
+    currentPassword: str = Field(..., min_length=1, max_length=128)
     archetype: Optional[Archetype] = None
     goalType: Optional[GoalType] = None
     recalculateGoals: bool = True

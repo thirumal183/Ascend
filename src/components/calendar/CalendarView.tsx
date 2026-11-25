@@ -161,12 +161,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-500">
               <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="h-2 w-2 rounded-full bg-emerald-600" />
                 <span>Met Target</span>
               </span>
               <span>·</span>
               <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-slate-900" />
+                <span className="h-2 w-2 rounded-full bg-[#2563EB]" />
                 <span>Today</span>
               </span>
             </div>
@@ -195,14 +195,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   onClick={() => setSelectedDayNumber(entry.dayNumber)}
                   aria-label={`${currentMonthName} ${entry.dayNumber}, ${entry.calories ? `${entry.calories} calories logged` : 'Scheduled day'}`}
                   aria-pressed={isSelected}
-                  className={`p-2.5 rounded-xl border text-left transition-all min-h-[82px] flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
+                  className={`p-2.5 rounded-xl border text-left transition-all min-h-[82px] flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] ${
                     isSelected
-                      ? 'bg-sky-50 border-sky-500 ring-2 ring-sky-500/20 shadow-xs'
+                      ? 'bg-blue-50 border-[#2563EB] ring-2 ring-[#2563EB]/20 shadow-xs'
                       : entry.isToday
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-md'
+                      ? 'bg-[#0A1628] text-white border-[#0A1628] shadow-md'
                       : entry.adherenceStatus === 'upcoming'
-                      ? 'bg-slate-50/60 border-slate-200/60 text-slate-600 hover:bg-slate-100'
-                      : 'bg-white border-slate-200/80 hover:border-slate-300 text-slate-800'
+                      ? 'bg-slate-50 border-slate-200/70 text-slate-500 hover:bg-slate-100'
+                      : 'bg-white border-slate-200 hover:border-slate-300 text-[#0A1628]'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full">

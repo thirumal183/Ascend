@@ -29,27 +29,27 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
     const getPathwayBorder = () => {
       switch (pathway) {
         case OnboardingPathway.AthletePerformance:
-          return 'border-sky-200/80 bg-gradient-to-b from-sky-50/40 via-white to-white';
+          return 'border-blue-200/90 bg-gradient-to-b from-blue-50/45 via-white to-white';
         case OnboardingPathway.MuscleGain:
-          return 'border-amber-200/80 bg-gradient-to-b from-amber-50/40 via-white to-white';
+          return 'border-orange-200/90 bg-gradient-to-b from-orange-50/45 via-white to-white';
         case OnboardingPathway.GeneralFitness:
         default:
-          return 'border-emerald-200/80 bg-gradient-to-b from-emerald-50/40 via-white to-white';
+          return 'border-emerald-200/90 bg-gradient-to-b from-emerald-50/45 via-white to-white';
       }
     };
 
     const variantClasses = {
       default:
-        'bg-white border border-slate-200/70 rounded-2xl shadow-[0_2px_10px_-2px_rgba(15,23,42,0.03)] text-slate-900 transition-all duration-200',
+        'bg-white border border-slate-200/90 rounded-2xl shadow-[0_2px_10px_-2px_rgba(10,22,40,0.04)] text-slate-900 transition-all duration-200',
       elevated:
-        'bg-gradient-to-b from-white via-white to-slate-50/40 border border-slate-200/70 rounded-3xl shadow-[0_8px_30px_-6px_rgba(15,23,42,0.05)] text-slate-900',
+        'bg-gradient-to-b from-white via-white to-slate-50/60 border border-slate-200/90 rounded-2xl shadow-[0_10px_30px_-8px_rgba(10,22,40,0.07)] text-slate-900',
       interactive:
-        'bg-white border border-slate-200/70 rounded-2xl shadow-[0_2px_10px_-2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_-4px_rgba(15,23,42,0.08)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer text-slate-900',
+        'bg-white border border-slate-200/90 rounded-2xl shadow-[0_2px_10px_-2px_rgba(10,22,40,0.04)] hover:border-blue-300/80 hover:shadow-[0_12px_28px_-6px_rgba(37,99,235,0.12)] hover:-translate-y-0.5 transition-all duration-200 cursor-pointer text-slate-900',
       dark:
-        'bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl text-white shadow-[0_12px_36px_-8px_rgba(0,0,0,0.35)]',
-      pathway: `border rounded-3xl shadow-[0_4px_20px_-4px_rgba(15,23,42,0.04)] ${getPathwayBorder()} text-slate-900`,
+        'bg-[#0A1628] border border-slate-800 rounded-2xl text-white shadow-[0_14px_38px_-10px_rgba(10,22,40,0.4)]',
+      pathway: `border rounded-2xl shadow-[0_6px_22px_-6px_rgba(10,22,40,0.05)] ${getPathwayBorder()} text-slate-900`,
       subtle:
-        'bg-slate-100/60 border border-slate-200/50 rounded-2xl text-slate-900',
+        'bg-slate-100/85 border border-slate-200/80 rounded-2xl text-slate-900',
     }[variant];
 
     return (

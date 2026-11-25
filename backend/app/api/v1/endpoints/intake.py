@@ -12,12 +12,16 @@ from app.api.v1.deps import get_current_user, get_db
 from app.models.user import User
 from app.schemas.nutrition import (
     CreateIntakeRequest,
+    CreateWaterIntakeRequest,
     DailyIntakeResponse,
+    DailyWaterResponse,
     IntakeRecordResponse,
     IntakeReportResponse,
     UpdateIntakeRequest,
+    UpdateWaterIntakeRequest,
+    WaterIntakeRecordResponse,
 )
-from app.services.nutrition_service import IntakeService
+from app.services.nutrition_service import IntakeService, WaterService
 
 router = APIRouter()
 
@@ -117,3 +121,88 @@ async def get_intake_reports(
         current_user=current_user,
         days=days,
     )
+
+
+@router.get(
+    "/water",
+    response_model=DailyWaterResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get user's daily water intake log and total",
+)
+async def get_daily_water(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    date_iso: Optional[str] = Query(
+        default=None,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="ISO date YYYY-MM-DD (defaults to today)",
+    ),
+) -> DailyWaterResponse:
+    """Fetches daily hydration entries and total milliliters for the given date."""
+    from datetime import date as dt_date
+
+    target_date = date_iso or dt_date.today().isoformat()
+    return await WaterService.get_water_logs(
+        db=db,
+        current_user=current_user,
+        date_iso=target_date,
+    )
+
+
+@router.post(
+    "/water",
+    response_model=WaterIntakeRecordResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Log a new water intake entry",
+)
+async def log_water_intake(
+    payload: CreateWaterIntakeRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WaterIntakeRecordResponse:
+    """Creates a persisted water intake entry."""
+    return await WaterService.log_water(
+        db=db,
+        current_user=current_user,
+        payload=payload,
+    )
+
+
+@router.put(
+    "/water/{record_id}",
+    response_model=WaterIntakeRecordResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update a logged water intake entry",
+)
+async def update_water_intake(
+    record_id: uuid.UUID,
+    payload: UpdateWaterIntakeRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WaterIntakeRecordResponse:
+    """Updates amount or notes on an owned water intake entry."""
+    return await WaterService.update_water(
+        db=db,
+        current_user=current_user,
+        record_id=record_id,
+        payload=payload,
+    )
+
+
+@router.delete(
+    "/water/{record_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a logged water intake entry",
+)
+async def delete_water_intake(
+    record_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Removes a previously logged water intake entry."""
+    await WaterService.delete_water(
+        db=db,
+        current_user=current_user,
+        record_id=record_id,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

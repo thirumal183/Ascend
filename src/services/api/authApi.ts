@@ -126,10 +126,17 @@ export const authApi = {
     });
   },
 
-  async refresh(refreshToken: string): Promise<TokenResponse> {
+  async verifyPassword(password: string): Promise<{ verified: boolean }> {
+    return apiClient<{ verified: boolean }>('/auth/verify-password', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  },
+
+  async refresh(refreshToken?: string): Promise<TokenResponse> {
     const response = await apiClient<TokenResponse>('/auth/refresh', {
       method: 'POST',
-      body: JSON.stringify({ refreshToken }),
+      body: JSON.stringify(refreshToken ? { refreshToken } : {}),
       skipAuth: true,
     });
     setStoredTokens(response.accessToken, response.refreshToken);

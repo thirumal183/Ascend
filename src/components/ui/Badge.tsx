@@ -32,9 +32,9 @@ export const Badge: React.FC<BadgeProps> = ({
   const getPathwayClasses = () => {
     switch (pathway) {
       case OnboardingPathway.AthletePerformance:
-        return 'bg-sky-50 text-sky-800 border-sky-200/80';
+        return 'bg-blue-50 text-blue-700 border-blue-200/80';
       case OnboardingPathway.MuscleGain:
-        return 'bg-amber-50 text-amber-800 border-amber-200/80';
+        return 'bg-orange-50 text-orange-800 border-orange-200/80';
       case OnboardingPathway.GeneralFitness:
       default:
         return 'bg-emerald-50 text-emerald-800 border-emerald-200/80';

@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -22,6 +22,7 @@ from app.schemas.workout import (
     ExerciseItemResponse,
     ExerciseSetLogItem,
     ExerciseSetLogResponse,
+    UpdateExerciseItemRequest,
     UpdateSetLogsRequest,
     UpdateWorkoutSessionRequest,
     WorkoutPlanDetailResponse,
@@ -44,6 +45,7 @@ def map_exercise_response(ex: ExerciseItem) -> ExerciseItemResponse:
         restSeconds=ex.rest_seconds,
         notes=ex.notes,
         sortOrder=ex.sort_order,
+        createdByUserId=ex.created_by_user_id,
     )
 
 
@@ -140,7 +142,13 @@ class WorkoutService:
         if not plan.is_system_template and (user_id is None or plan.created_by_user_id != user_id):
             raise AccessForbiddenException("You do not have permission to access this workout plan.")
 
-        exercises = [map_exercise_response(ex) for ex in plan.exercises]
+        visible_exercises = [
+            ex
+            for ex in plan.exercises
+            if ex.created_by_user_id is None or (user_id is not None and ex.created_by_user_id == user_id)
+        ]
+        visible_exercises.sort(key=lambda item: (item.sort_order, item.name))
+        exercises = [map_exercise_response(ex) for ex in visible_exercises]
         return WorkoutPlanDetailResponse(
             id=plan.id,
             title=plan.title,
@@ -179,6 +187,7 @@ class WorkoutService:
         for idx, ex_data in enumerate(payload.exercises):
             ex = ExerciseItem(
                 workout_plan_id=plan.id,
+                created_by_user_id=user_id,
                 name=ex_data.name.strip(),
                 muscle_group=ex_data.muscleGroup.strip(),
                 default_sets=ex_data.defaultSets,
@@ -216,8 +225,18 @@ class WorkoutService:
     async def list_exercises(
         db: AsyncSession,
         muscle_group: Optional[str] = None,
+        user_id: Optional[uuid.UUID] = None,
     ) -> List[ExerciseItemResponse]:
         stmt = select(ExerciseItem)
+        if user_id is not None:
+            stmt = stmt.where(
+                or_(
+                    ExerciseItem.created_by_user_id.is_(None),
+                    ExerciseItem.created_by_user_id == user_id,
+                )
+            )
+        else:
+            stmt = stmt.where(ExerciseItem.created_by_user_id.is_(None))
         if muscle_group and muscle_group.strip():
             stmt = stmt.where(func.lower(ExerciseItem.muscle_group) == muscle_group.strip().lower())
         stmt = stmt.order_by(ExerciseItem.name.asc())
@@ -229,11 +248,106 @@ class WorkoutService:
     async def get_exercise_by_id(
         db: AsyncSession,
         exercise_id: uuid.UUID,
+        user_id: Optional[uuid.UUID] = None,
     ) -> ExerciseItemResponse:
         ex = await db.get(ExerciseItem, exercise_id)
         if not ex:
             raise EntityNotFoundException(f"Exercise item '{exercise_id}' not found.")
+        if ex.created_by_user_id is not None and (user_id is None or ex.created_by_user_id != user_id):
+            raise AccessForbiddenException("You do not have permission to access this exercise.")
         return map_exercise_response(ex)
+
+    @staticmethod
+    async def add_exercise_to_plan(
+        db: AsyncSession,
+        plan_id: uuid.UUID,
+        user_id: uuid.UUID,
+        payload: CreateExerciseItemRequest,
+    ) -> ExerciseItemResponse:
+        plan = await db.get(WorkoutPlan, plan_id)
+        if not plan:
+            raise EntityNotFoundException(f"Workout plan '{plan_id}' not found.")
+        if not plan.is_system_template and plan.created_by_user_id != user_id:
+            raise AccessForbiddenException("You do not have permission to add exercises to this workout plan.")
+
+        sort_order = payload.sortOrder
+        if sort_order == 0:
+            max_order = await db.scalar(
+                select(func.coalesce(func.max(ExerciseItem.sort_order), 0)).where(
+                    ExerciseItem.workout_plan_id == plan_id
+                )
+            )
+            sort_order = int(max_order or 0) + 1
+
+        ex = ExerciseItem(
+            workout_plan_id=plan_id,
+            created_by_user_id=user_id,
+            name=payload.name.strip(),
+            muscle_group=payload.muscleGroup.strip(),
+            default_sets=payload.defaultSets,
+            default_reps=payload.defaultReps.strip(),
+            default_load_kg=Decimal(str(payload.defaultLoadKg)),
+            rest_seconds=payload.restSeconds,
+            notes=payload.notes.strip() if payload.notes else None,
+            sort_order=sort_order,
+        )
+        db.add(ex)
+        await db.commit()
+        await db.refresh(ex)
+        return map_exercise_response(ex)
+
+    @staticmethod
+    async def update_exercise(
+        db: AsyncSession,
+        exercise_id: uuid.UUID,
+        user_id: uuid.UUID,
+        payload: UpdateExerciseItemRequest,
+    ) -> ExerciseItemResponse:
+        ex = await db.get(ExerciseItem, exercise_id)
+        if not ex:
+            raise EntityNotFoundException(f"Exercise item '{exercise_id}' not found.")
+        if ex.created_by_user_id is None:
+            raise AccessForbiddenException("System exercise templates cannot be modified.")
+        if ex.created_by_user_id != user_id:
+            raise AccessForbiddenException("You do not have permission to modify this exercise.")
+
+        if payload.name is not None:
+            ex.name = payload.name.strip()
+        if payload.muscleGroup is not None:
+            ex.muscle_group = payload.muscleGroup.strip()
+        if payload.defaultSets is not None:
+            ex.default_sets = payload.defaultSets
+        if payload.defaultReps is not None:
+            ex.default_reps = payload.defaultReps.strip()
+        if payload.defaultLoadKg is not None:
+            ex.default_load_kg = Decimal(str(payload.defaultLoadKg))
+        if payload.restSeconds is not None:
+            ex.rest_seconds = payload.restSeconds
+        if payload.notes is not None:
+            ex.notes = payload.notes.strip() or None
+        if payload.sortOrder is not None:
+            ex.sort_order = payload.sortOrder
+
+        await db.commit()
+        await db.refresh(ex)
+        return map_exercise_response(ex)
+
+    @staticmethod
+    async def delete_exercise(
+        db: AsyncSession,
+        exercise_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> None:
+        ex = await db.get(ExerciseItem, exercise_id)
+        if not ex:
+            raise EntityNotFoundException(f"Exercise item '{exercise_id}' not found.")
+        if ex.created_by_user_id is None:
+            raise AccessForbiddenException("System exercise templates cannot be deleted.")
+        if ex.created_by_user_id != user_id:
+            raise AccessForbiddenException("You do not have permission to delete this exercise.")
+
+        await db.delete(ex)
+        await db.commit()
 
     @staticmethod
     async def create_workout_session(

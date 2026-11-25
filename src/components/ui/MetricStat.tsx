@@ -30,12 +30,12 @@ export const MetricStat: React.FC<MetricStatProps> = ({
   const getIconColor = () => {
     switch (pathway) {
       case OnboardingPathway.AthletePerformance:
-        return 'text-sky-600 bg-sky-50 border-sky-100';
+        return 'text-blue-600 bg-blue-50 border-blue-100';
       case OnboardingPathway.MuscleGain:
-        return 'text-amber-600 bg-amber-50 border-amber-100';
+        return 'text-orange-600 bg-orange-50 border-orange-100';
       case OnboardingPathway.GeneralFitness:
       default:
-        return 'text-emerald-600 bg-emerald-50 border-emerald-100';
+        return 'text-emerald-700 bg-emerald-50 border-emerald-100';
     }
   };
 

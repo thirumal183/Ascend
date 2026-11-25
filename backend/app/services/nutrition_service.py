@@ -13,16 +13,18 @@ from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import AccessForbiddenException, EntityNotFoundException, ValidationException
 from app.models.enums import NutrientCategory
-from app.models.nutrition import FoodItem, FoodNutrient, IntakeRecord, Nutrient
+from app.models.nutrition import FoodItem, FoodNutrient, IntakeRecord, Nutrient, WaterIntakeRecord
 from app.models.user import NutritionGoal, User
 from app.schemas.nutrition import (
     ComputedNutrientsResponse,
     CoreNutrientsSchema,
     CreateCustomFoodRequest,
     CreateIntakeRequest,
+    CreateWaterIntakeRequest,
     DailyAdherenceItem,
     DailyIntakeResponse,
     DailyTotalsResponse,
+    DailyWaterResponse,
     FoodDetailResponse,
     FoodItemResponse,
     FoodSearchResponse,
@@ -30,6 +32,8 @@ from app.schemas.nutrition import (
     IntakeReportResponse,
     NutrientDetailSchema,
     UpdateIntakeRequest,
+    UpdateWaterIntakeRequest,
+    WaterIntakeRecordResponse,
 )
 
 CANONICAL_NUTRIENTS = [
@@ -502,9 +506,14 @@ class IntakeService:
                 )
             )
 
-        # Fetch user goals for water target
+        # Fetch user goals for water target and actual logged hydration for the date
         goal = await db.scalar(select(NutritionGoal).where(NutritionGoal.user_id == current_user.id))
         water_target = goal.water_ml if goal else 2500
+        water_sum_stmt = select(func.coalesce(func.sum(WaterIntakeRecord.amount_ml), 0)).where(
+            WaterIntakeRecord.user_id == current_user.id,
+            WaterIntakeRecord.date_logged == date_obj,
+        )
+        water_logged_ml = int((await db.scalar(water_sum_stmt)) or 0)
 
         daily_totals = DailyTotalsResponse(
             calories=total_cals,
@@ -513,7 +522,8 @@ class IntakeService:
             fatG=round(total_fat, 1),
             fiberG=round(total_fiber, 1) if has_measured_fiber else None,
             sodiumMg=round(total_sodium, 1) if has_measured_sodium else None,
-            waterMl=water_target,
+            waterMl=water_logged_ml,
+            waterTargetMl=water_target,
         )
 
         return DailyIntakeResponse(
@@ -700,3 +710,100 @@ class IntakeService:
             days=days,
             report=report_items,
         )
+
+
+def _map_water_record(record: WaterIntakeRecord) -> WaterIntakeRecordResponse:
+    """Maps a WaterIntakeRecord ORM row to its API response schema."""
+    return WaterIntakeRecordResponse(
+        id=record.id,
+        userId=record.user_id,
+        amountMl=record.amount_ml,
+        dateLogged=record.date_logged.isoformat(),
+        loggedAt=record.logged_at,
+        notes=record.notes,
+        createdAt=record.created_at,
+    )
+
+
+class WaterService:
+    """Manages daily water intake persistence, aggregation, and CRUD."""
+
+    @staticmethod
+    async def get_water_logs(
+        db: AsyncSession,
+        current_user: User,
+        date_iso: str,
+    ) -> DailyWaterResponse:
+        date_obj = date.fromisoformat(date_iso)
+        stmt = (
+            select(WaterIntakeRecord)
+            .where(
+                WaterIntakeRecord.user_id == current_user.id,
+                WaterIntakeRecord.date_logged == date_obj,
+            )
+            .order_by(WaterIntakeRecord.logged_at.asc(), WaterIntakeRecord.created_at.asc())
+        )
+        records = (await db.scalars(stmt)).all()
+        goal = await db.scalar(select(NutritionGoal).where(NutritionGoal.user_id == current_user.id))
+        target_ml = goal.water_ml if goal else 2500
+        total_ml = sum(r.amount_ml for r in records)
+        return DailyWaterResponse(
+            dateIso=date_iso,
+            totalMl=total_ml,
+            targetMl=target_ml,
+            records=[_map_water_record(r) for r in records],
+        )
+
+    @staticmethod
+    async def log_water(
+        db: AsyncSession,
+        current_user: User,
+        payload: CreateWaterIntakeRequest,
+    ) -> WaterIntakeRecordResponse:
+        date_obj = date.fromisoformat(payload.dateIso)
+        record = WaterIntakeRecord(
+            user_id=current_user.id,
+            amount_ml=payload.amountMl,
+            date_logged=date_obj,
+            logged_at=datetime.now(timezone.utc).strftime("%H:%M"),
+            notes=payload.notes.strip() if payload.notes else None,
+        )
+        db.add(record)
+        await db.commit()
+        await db.refresh(record)
+        return _map_water_record(record)
+
+    @staticmethod
+    async def update_water(
+        db: AsyncSession,
+        current_user: User,
+        record_id: uuid.UUID,
+        payload: UpdateWaterIntakeRequest,
+    ) -> WaterIntakeRecordResponse:
+        record = await db.get(WaterIntakeRecord, record_id)
+        if not record:
+            raise EntityNotFoundException(f"Water intake record '{record_id}' not found.")
+        if record.user_id != current_user.id:
+            raise AccessForbiddenException("You do not have permission to modify this water intake record.")
+
+        record.amount_ml = payload.amountMl
+        if payload.notes is not None:
+            record.notes = payload.notes.strip() or None
+        await db.commit()
+        await db.refresh(record)
+        return _map_water_record(record)
+
+    @staticmethod
+    async def delete_water(
+        db: AsyncSession,
+        current_user: User,
+        record_id: uuid.UUID,
+    ) -> None:
+        record = await db.get(WaterIntakeRecord, record_id)
+        if not record:
+            raise EntityNotFoundException(f"Water intake record '{record_id}' not found.")
+        if record.user_id != current_user.id:
+            raise AccessForbiddenException("You do not have permission to delete this water intake record.")
+
+        await db.delete(record)
+        await db.commit()

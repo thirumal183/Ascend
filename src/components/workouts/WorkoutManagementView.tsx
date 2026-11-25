@@ -221,8 +221,8 @@ export const WorkoutManagementView: React.FC<WorkoutManagementViewProps> = ({
                 onClick={() => setSelectedPlanId(plan.id)}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 ${
                   isActive
-                    ? 'bg-slate-900 text-white'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                    ? 'bg-[#0A1628] text-white'
+                    : 'text-slate-600 hover:text-[#0A1628] hover:bg-slate-100'
                 }`}
               >
                 <span>{plan.dayLabel.replace(' Session', '')}</span>

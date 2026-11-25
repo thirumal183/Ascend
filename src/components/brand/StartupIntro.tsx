@@ -1,70 +1,103 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AscendLogo } from './AscendLogo';
 
 interface StartupIntroProps {
   onComplete: () => void;
 }
 
-export const StartupIntro: React.FC<StartupIntroProps> = ({
-  onComplete,
-}) => {
+/**
+ * StartupIntro — Premium ~2.95s product opening sequence.
+ *
+ * Stage 1 (0–420ms):    Large ASCEND symbol fades in at center with cobalt halo.
+ * Stage 2 (420–1150ms): "ASCEND" wordmark and tagline reveal below.
+ * Stage 3 (1150–2480ms): Pathway identity badges appear.
+ * Stage 4 (2480–2950ms): Dark backdrop fades out while the logo symbol smoothly
+ *   translates & scales from center directly into the navbar logo position
+ *   (`[data-ascend-navbar-logo]`), creating a seamless handoff.
+ *
+ * Supports [ESC]/click/Enter/Space skip and prefers-reduced-motion.
+ */
+export const StartupIntro: React.FC<StartupIntroProps> = ({ onComplete }) => {
   const [stage, setStage] = useState<1 | 2 | 3 | 4>(1);
   const [fadingOut, setFadingOut] = useState(false);
+  const [logoFlying, setLogoFlying] = useState(false);
+  const [flyTransform, setFlyTransform] = useState<string>('none');
+  const logoWrapperRef = useRef<HTMLDivElement>(null);
+  const completedRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
-    // Check prefers-reduced-motion
+    const finishOnce = () => {
+      if (completedRef.current) return;
+      completedRef.current = true;
+      onCompleteRef.current();
+    };
+
     const prefersReducedMotion =
       typeof window !== 'undefined' &&
       window.matchMedia &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     if (prefersReducedMotion) {
-      onComplete();
+      finishOnce();
       return;
     }
 
-    // Sequence timing
-    // Stage 1: Symbol ascends (0ms - 750ms)
-    // Stage 2: Wordmark & Tagline reveal (750ms - 1500ms)
-    const t2 = setTimeout(() => {
-      setStage(2);
-    }, 750);
+    // 2.95s staged choreography on Deep Navy + Cobalt/Violet light field
+    const t2 = window.setTimeout(() => setStage(2), 420);
+    const t3 = window.setTimeout(() => setStage(3), 1150);
+    const tFly = window.setTimeout(() => {
+      // Measure navbar logo target if mounted & visible
+      let transformStr = `translate3d(${-Math.max(110, window.innerWidth / 2 - 72)}px, ${-(
+        window.innerHeight / 2 - 40
+      )}px, 0) scale(0.36)`;
 
-    // Stage 3: Ambient luminescence pulse (1500ms - 2300ms)
-    const t3 = setTimeout(() => {
-      setStage(3);
-    }, 1500);
+      const logoEl = logoWrapperRef.current;
+      const navbarTarget = document.querySelector('[data-ascend-navbar-logo]');
+      if (logoEl && navbarTarget) {
+        const srcRect = logoEl.getBoundingClientRect();
+        const dstRect = navbarTarget.getBoundingClientRect();
+        if (dstRect.width > 0 && dstRect.height > 0 && srcRect.width > 0) {
+          // Navbar symbol sits on the left edge of the navbar logo container (~36px wide)
+          const targetCenterX = dstRect.left + 18;
+          const targetCenterY = dstRect.top + dstRect.height / 2;
+          const srcCenterX = srcRect.left + srcRect.width / 2;
+          const srcCenterY = srcRect.top + srcRect.height / 2;
+          const dx = targetCenterX - srcCenterX;
+          const dy = targetCenterY - srcCenterY;
+          const scale = Math.max(0.28, Math.min(0.6, 36 / srcRect.width));
+          transformStr = `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
+        }
+      }
 
-    // Stage 4: Fade out overlay (2300ms - 2850ms)
-    const t4 = setTimeout(() => {
+      setFlyTransform(transformStr);
       setStage(4);
+      setLogoFlying(true);
       setFadingOut(true);
-    }, 2350);
+    }, 2480);
+    const tEnd = window.setTimeout(finishOnce, 2950);
 
-    // Complete & dismiss
-    const tEnd = setTimeout(() => {
-      onComplete();
-    }, 2850);
-
-    // Keyboard escape listener
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter') {
-        onComplete();
+        finishOnce();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-      clearTimeout(tEnd);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+      window.clearTimeout(tFly);
+      window.clearTimeout(tEnd);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onComplete]);
+  }, []);
 
-  const handleSkip = () => {
-    onComplete();
+  const handleManualSkip = () => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    onCompleteRef.current();
   };
 
   return (
@@ -72,88 +105,147 @@ export const StartupIntro: React.FC<StartupIntroProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="ASCEND Startup Intro"
-      className={`fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#050811] text-white transition-opacity duration-500 ease-out select-none ${
-        fadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
-      }`}
+      onClick={handleManualSkip}
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center text-white select-none cursor-pointer pointer-events-auto"
     >
-      {/* Ambient Luminescence Glow Mesh */}
+      {/* Fading Deep Navy Backdrop (separate layer so the flying logo stays crisp during handoff) */}
       <div
-        className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-out ${
-          stage >= 3 ? 'opacity-100' : 'opacity-0'
+        aria-hidden="true"
+        className={`absolute inset-0 bg-[#0A1628] transition-opacity duration-[470ms] ease-out ${
+          fadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
         }`}
       >
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] rounded-full bg-radial from-teal-500/20 via-sky-500/10 to-transparent blur-[100px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full bg-radial from-emerald-400/15 via-transparent to-transparent blur-[60px]" />
+        {/* Layered Deep Navy + Electric Cobalt & Violet Ambient Field */}
+        <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_42%,rgba(37,99,235,0.24),transparent_52%),radial-gradient(circle_at_64%_60%,rgba(124,58,237,0.16),transparent_48%)]" />
       </div>
 
-      {/* Skip Button */}
+      {/* Precision Geometric Pulse Halo */}
+      <div
+        aria-hidden="true"
+        className={`absolute h-80 w-80 rounded-full border border-blue-400/15 transition-all duration-1000 ease-out pointer-events-none ${
+          fadingOut
+            ? 'scale-150 opacity-0'
+            : stage >= 2
+            ? 'scale-125 opacity-60'
+            : 'scale-75 opacity-0'
+        }`}
+      />
+      <div
+        aria-hidden="true"
+        className={`absolute h-52 w-52 rounded-full border border-indigo-400/20 transition-all duration-700 ease-out pointer-events-none ${
+          fadingOut
+            ? 'scale-125 opacity-0'
+            : stage >= 1
+            ? 'scale-100 opacity-80'
+            : 'scale-75 opacity-0'
+        }`}
+      />
+
+      {/* Skip Control */}
       <button
         type="button"
-        onClick={handleSkip}
-        className="absolute top-6 right-6 z-10 px-3 py-1.5 rounded-full text-[11px] font-mono tracking-wider text-slate-400 hover:text-white bg-slate-900/60 hover:bg-slate-800 border border-slate-800/80 transition-all focus:outline-none focus:ring-2 focus:ring-teal-500/50"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleManualSkip();
+        }}
+        className={`absolute top-6 right-6 z-10 px-3.5 py-1.5 rounded-full text-[11px] font-mono tracking-wider text-blue-100/80 hover:text-white bg-white/10 hover:bg-white/15 border border-white/15 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
+          fadingOut ? 'opacity-0' : 'opacity-100'
+        }`}
         aria-label="Skip startup animation"
       >
         SKIP [ESC]
       </button>
 
-      {/* Core Center Sequence Container */}
-      <div className="relative z-10 flex flex-col items-center text-center px-6">
-        {/* Stage 1: Official Logo Symbol Ascending */}
+      {/* Core Staged Reveal */}
+      <div className="relative z-10 flex flex-col items-center text-center px-6 max-w-md w-full">
+        {/* Logo Symbol — large commanding presence; glides seamlessly to navbar position on exit */}
         <div
-          className={`transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-            stage >= 1
+          ref={logoWrapperRef}
+          style={
+            logoFlying
+              ? {
+                  transform: flyTransform,
+                  transition: 'transform 470ms cubic-bezier(0.16, 1, 0.3, 1), opacity 140ms ease-out 330ms',
+                  opacity: 0,
+                }
+              : undefined
+          }
+          className={`relative flex items-center justify-center transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            !logoFlying && stage >= 1
               ? 'opacity-100 translate-y-0 scale-100'
-              : 'opacity-0 translate-y-8 scale-95'
+              : !logoFlying
+              ? 'opacity-0 translate-y-4 scale-90'
+              : ''
           }`}
         >
-          <div className="relative">
-            <AscendLogo
-              variant="symbol"
-              size="xl"
-              colorScheme="light"
-              className="drop-shadow-[0_8px_24px_rgba(0,196,140,0.35)]"
-            />
-            {/* Subtle light glint on logo apex */}
-            <div
-              className={`absolute top-0 right-1 w-3 h-3 rounded-full bg-white transition-opacity duration-500 blur-[2px] ${
-                stage >= 2 ? 'opacity-80 scale-125' : 'opacity-0 scale-50'
-              }`}
-            />
-          </div>
+          <div
+            aria-hidden="true"
+            className={`absolute -inset-6 rounded-full bg-blue-500/20 blur-2xl pointer-events-none transition-opacity duration-300 ${
+              logoFlying ? 'opacity-0' : 'opacity-100'
+            }`}
+          />
+          <AscendLogo
+            variant="symbol"
+            size="xl"
+            colorScheme="light"
+            className="relative !w-24 !h-24 sm:!w-28 sm:!h-28 drop-shadow-[0_0_24px_rgba(37,99,235,0.35)]"
+          />
         </div>
 
-        {/* Stage 2: Official Wordmark & Tagline Reveal */}
+        {/* Wordmark + Tagline */}
         <div
-          className={`mt-6 space-y-2 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-            stage >= 2
+          className={`mt-5 space-y-2 transition-all ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            logoFlying
+              ? 'duration-200 opacity-0 -translate-y-3 scale-95'
+              : 'duration-700'
+          } ${
+            stage >= 2 && !logoFlying
               ? 'opacity-100 translate-y-0'
-              : 'opacity-0 translate-y-4'
+              : stage < 2
+              ? 'opacity-0 translate-y-3'
+              : ''
           }`}
         >
-          <h1 className="font-display text-2xl sm:text-3xl font-black uppercase tracking-[0.28em] text-white leading-none">
+          <p className="font-display text-3xl sm:text-4xl font-extrabold uppercase tracking-[0.28em] text-white leading-none">
             ASCEND
-          </h1>
-          <p
-            className={`text-xs sm:text-sm font-semibold tracking-wide text-teal-400 transition-opacity duration-700 delay-150 ${
-              stage >= 2 ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
+          </p>
+          <p className="text-sm sm:text-base font-semibold tracking-wide text-blue-300">
             Getting Better Every Day.
           </p>
         </div>
 
-        {/* Stage 3: Scientific Platform Tag */}
+        {/* Pathway Identity Labels */}
         <div
-          className={`mt-6 transition-all duration-700 delay-100 ${
-            stage >= 3
+          className={`mt-5 flex flex-wrap items-center justify-center gap-2.5 transition-all ease-out ${
+            logoFlying
+              ? 'duration-150 opacity-0 translate-y-2'
+              : 'duration-500'
+          } ${
+            stage >= 3 && !logoFlying
               ? 'opacity-100 translate-y-0'
-              : 'opacity-0 translate-y-2'
+              : stage < 3
+              ? 'opacity-0 translate-y-2'
+              : ''
           }`}
         >
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-mono tracking-widest uppercase text-slate-400 bg-slate-900/80 border border-slate-800">
-            <span className="h-1.5 w-1.5 rounded-full bg-teal-400 animate-pulse" />
-            AI Nutrition & Fitness Platform
+          <span className="px-3 py-1.5 rounded-full text-[11px] font-bold tracking-wide bg-emerald-500/20 text-emerald-200 border border-emerald-400/25">
+            Balanced Nutrition
           </span>
+          <span className="px-3 py-1.5 rounded-full text-[11px] font-bold tracking-wide bg-blue-500/25 text-blue-200 border border-blue-400/30">
+            Athlete Output
+          </span>
+          <span className="px-3 py-1.5 rounded-full text-[11px] font-bold tracking-wide bg-orange-500/25 text-orange-200 border border-orange-400/30">
+            Muscle Gain
+          </span>
+        </div>
+
+        {/* Sleek 2.5s Progress Track */}
+        <div
+          className={`mt-7 w-44 h-0.5 rounded-full bg-white/15 overflow-hidden transition-opacity duration-200 ${
+            logoFlying ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
+          <div className="h-full bg-gradient-to-r from-blue-400 via-indigo-400 to-orange-400 animate-startup-progress" />
         </div>
       </div>
     </div>

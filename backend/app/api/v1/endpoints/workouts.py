@@ -11,10 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.deps import get_current_user, get_optional_current_user, get_db
 from app.models.user import User
 from app.schemas.workout import (
+    CreateExerciseItemRequest,
     CreateWorkoutPlanRequest,
     CreateWorkoutSessionRequest,
     ExerciseItemResponse,
     ExerciseSetLogResponse,
+    UpdateExerciseItemRequest,
     UpdateSetLogsRequest,
     UpdateWorkoutSessionRequest,
     WorkoutPlanDetailResponse,
@@ -113,10 +115,15 @@ async def delete_workout_plan(
 )
 async def list_exercises(
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
     muscle_group: Optional[str] = Query(default=None, description="Filter by muscle group"),
 ) -> List[ExerciseItemResponse]:
-    """Returns catalog exercise specifications."""
-    return await WorkoutService.list_exercises(db=db, muscle_group=muscle_group)
+    """Returns catalog exercise specifications scoped to system templates and user-owned exercises."""
+    return await WorkoutService.list_exercises(
+        db=db,
+        muscle_group=muscle_group,
+        user_id=current_user.id if current_user else None,
+    )
 
 
 @router.get(
@@ -128,9 +135,75 @@ async def list_exercises(
 async def get_exercise(
     exercise_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[Optional[User], Depends(get_optional_current_user)],
 ) -> ExerciseItemResponse:
-    """Returns single exercise configuration and default set benchmarks."""
-    return await WorkoutService.get_exercise_by_id(db=db, exercise_id=exercise_id)
+    """Returns single exercise configuration and default set benchmarks with ownership check."""
+    return await WorkoutService.get_exercise_by_id(
+        db=db,
+        exercise_id=exercise_id,
+        user_id=current_user.id if current_user else None,
+    )
+
+
+@router.post(
+    "/plans/{plan_id}/exercises",
+    response_model=ExerciseItemResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add an ad-hoc user-owned exercise to a workout plan",
+)
+async def add_exercise_to_plan(
+    plan_id: uuid.UUID,
+    payload: CreateExerciseItemRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ExerciseItemResponse:
+    """Persists a user-created exercise scoped to the authenticated user."""
+    return await WorkoutService.add_exercise_to_plan(
+        db=db,
+        plan_id=plan_id,
+        user_id=current_user.id,
+        payload=payload,
+    )
+
+
+@router.put(
+    "/exercises/{exercise_id}",
+    response_model=ExerciseItemResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update a user-owned exercise",
+)
+async def update_exercise(
+    exercise_id: uuid.UUID,
+    payload: UpdateExerciseItemRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ExerciseItemResponse:
+    """Updates a user-owned exercise while protecting system templates."""
+    return await WorkoutService.update_exercise(
+        db=db,
+        exercise_id=exercise_id,
+        user_id=current_user.id,
+        payload=payload,
+    )
+
+
+@router.delete(
+    "/exercises/{exercise_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a user-owned exercise",
+)
+async def delete_exercise(
+    exercise_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Deletes a user-owned exercise while protecting system templates."""
+    await WorkoutService.delete_exercise(
+        db=db,
+        exercise_id=exercise_id,
+        user_id=current_user.id,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # --- Workout Sessions & Set Execution Logs ---

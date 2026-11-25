@@ -287,3 +287,91 @@ async def test_workout_session_cross_user_isolation(async_client: AsyncClient):
     # User A deletes their session -> 204
     del_a = await async_client.delete(f"/api/v1/workouts/sessions/{session_id}", headers=headers_a)
     assert del_a.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_adhoc_exercise_persistence_and_cross_user_isolation(async_client: AsyncClient):
+    """Verifies user-owned ad-hoc exercise CRUD, system template protection, and cross-user isolation."""
+    user_a = await create_test_user_and_token(async_client, "ex_user_a")
+    user_b = await create_test_user_and_token(async_client, "ex_user_b")
+    headers_a = {"Authorization": f"Bearer {user_a['tokens']['accessToken']}"}
+    headers_b = {"Authorization": f"Bearer {user_b['tokens']['accessToken']}"}
+
+    # Fetch a seeded system workout plan
+    plans_res = await async_client.get("/api/v1/workouts/plans", headers=headers_a)
+    assert plans_res.status_code == 200
+    plans = plans_res.json()
+    assert len(plans) >= 1
+    system_plan_id = plans[0]["id"]
+
+    # Check system exercise template protection
+    plan_detail = await async_client.get(f"/api/v1/workouts/plans/{system_plan_id}", headers=headers_a)
+    assert plan_detail.status_code == 200
+    system_exercises = plan_detail.json()["exercises"]
+    if system_exercises:
+        sys_ex_id = system_exercises[0]["id"]
+        sys_upd = await async_client.put(
+            f"/api/v1/workouts/exercises/{sys_ex_id}",
+            json={"name": "Tampered"},
+            headers=headers_a,
+        )
+        assert sys_upd.status_code == 403
+        sys_del = await async_client.delete(
+            f"/api/v1/workouts/exercises/{sys_ex_id}",
+            headers=headers_a,
+        )
+        assert sys_del.status_code == 403
+
+    # User A adds an ad-hoc exercise to the plan
+    unique_ex = f"Bulgarian Split Squat {uuid.uuid4().hex[:6]}"
+    add_res = await async_client.post(
+        f"/api/v1/workouts/plans/{system_plan_id}/exercises",
+        json={
+            "name": unique_ex,
+            "muscleGroup": "Legs",
+            "defaultSets": 4,
+            "defaultReps": "10",
+            "defaultLoadKg": 20.0,
+            "restSeconds": 90,
+        },
+        headers=headers_a,
+    )
+    assert add_res.status_code == 201
+    created_ex = add_res.json()
+    ex_id = created_ex["id"]
+    assert created_ex["createdByUserId"] is not None
+
+    # User A sees it in plan detail and exercise catalog
+    plan_a = await async_client.get(f"/api/v1/workouts/plans/{system_plan_id}", headers=headers_a)
+    assert any(e["id"] == ex_id for e in plan_a.json()["exercises"])
+    list_a = await async_client.get("/api/v1/workouts/exercises", headers=headers_a)
+    assert any(e["id"] == ex_id for e in list_a.json())
+
+    # User B does NOT see User A's ad-hoc exercise and cannot access/modify/delete it
+    plan_b = await async_client.get(f"/api/v1/workouts/plans/{system_plan_id}", headers=headers_b)
+    assert not any(e["id"] == ex_id for e in plan_b.json()["exercises"])
+    list_b = await async_client.get("/api/v1/workouts/exercises", headers=headers_b)
+    assert not any(e["id"] == ex_id for e in list_b.json())
+
+    get_b = await async_client.get(f"/api/v1/workouts/exercises/{ex_id}", headers=headers_b)
+    assert get_b.status_code == 403
+    upd_b = await async_client.put(
+        f"/api/v1/workouts/exercises/{ex_id}",
+        json={"defaultLoadKg": 99.0},
+        headers=headers_b,
+    )
+    assert upd_b.status_code == 403
+    del_b = await async_client.delete(f"/api/v1/workouts/exercises/{ex_id}", headers=headers_b)
+    assert del_b.status_code == 403
+
+    # User A updates and deletes their ad-hoc exercise
+    upd_a = await async_client.put(
+        f"/api/v1/workouts/exercises/{ex_id}",
+        json={"defaultLoadKg": 24.0},
+        headers=headers_a,
+    )
+    assert upd_a.status_code == 200
+    assert upd_a.json()["defaultLoadKg"] == 24.0
+
+    del_a = await async_client.delete(f"/api/v1/workouts/exercises/{ex_id}", headers=headers_a)
+    assert del_a.status_code == 204

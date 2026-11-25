@@ -23,6 +23,7 @@ export interface UpdateUserProfilePayload {
 
 export interface SwitchPathwayPayload {
   pathway: string;
+  currentPassword: string;
   archetype?: string;
   goalType?: string;
   recalculateGoals?: boolean;

@@ -39,22 +39,21 @@ export const AscendLogo: React.FC<AscendLogoProps> = ({
     if (colorScheme === 'pathway') {
       switch (pathway) {
         case OnboardingPathway.AthletePerformance:
-          return '#0284C7'; // Electric Cobalt
+          return '#2563EB'; // Vivid Electric Cobalt
         case OnboardingPathway.MuscleGain:
-          return '#F59E0B'; // Solar Amber
+          return '#EA580C'; // Warm Energetic Orange
         case OnboardingPathway.GeneralFitness:
         default:
-          return '#00C48C'; // Official Bio-Emerald
+          return '#15803D'; // Refined Pathway Green
       }
     }
-    // Official ASCEND Bio-Emerald from finalized brand identity
-    return '#00C48C';
+    return colorScheme === 'dark' ? '#2563EB' : '#60A5FA';
   };
 
   const getPrimaryColor = () => {
     if (colorScheme === 'monochrome') return 'currentColor';
-    if (colorScheme === 'dark') return '#080E1A'; // Official Obsidian Navy for light daylight backgrounds
-    return '#FFFFFF'; // Pure White for dark navy/obsidian backgrounds
+    if (colorScheme === 'dark') return '#0A1628'; // Deep Navy for light cool-white surfaces
+    return '#FFFFFF'; // Crisp White for dark navy surfaces
   };
 
   const primaryColor = getPrimaryColor();

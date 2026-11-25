@@ -42,12 +42,12 @@ export const ProgressRing: React.FC<ProgressRingProps> = ({
   const getGradientStops = () => {
     switch (pathway) {
       case OnboardingPathway.AthletePerformance:
-        return { start: '#0284C7', end: '#38BDF8' };
+        return { start: '#1D4ED8', end: '#38BDF8' };
       case OnboardingPathway.MuscleGain:
-        return { start: '#D97706', end: '#FBBF24' };
+        return { start: '#C2410C', end: '#F59E0B' };
       case OnboardingPathway.GeneralFitness:
       default:
-        return { start: '#059669', end: '#34D399' };
+        return { start: '#15803D', end: '#10B981' };
     }
   };
 

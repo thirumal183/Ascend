@@ -16,11 +16,12 @@ async def test_all_15_entities_exist_in_metadata():
         "user_refresh_sessions",
         "user_profiles",
         "nutrition_goals",
-        # Domain 2 (4)
+        # Domain 2 (5)
         "nutrients",
         "food_items",
         "food_nutrients",
         "intake_records",
+        "water_intake_records",
         # Domain 3 (4)
         "workout_plans",
         "exercise_items",
@@ -34,7 +35,7 @@ async def test_all_15_entities_exist_in_metadata():
     }
     actual_tables = set(Base.metadata.tables.keys())
     assert actual_tables == expected_tables, f"Mismatch: {actual_tables ^ expected_tables}"
-    assert len(actual_tables) == 15
+    assert len(actual_tables) == 16
 
 
 @pytest.mark.asyncio
@@ -56,6 +57,7 @@ async def test_live_database_tables_exist():
             "food_items",
             "food_nutrients",
             "intake_records",
+            "water_intake_records",
             "workout_plans",
             "exercise_items",
             "workout_sessions",

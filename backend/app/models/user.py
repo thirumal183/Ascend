@@ -25,7 +25,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 if TYPE_CHECKING:
-    from app.models.nutrition import FoodItem, IntakeRecord
+    from app.models.nutrition import FoodItem, IntakeRecord, WaterIntakeRecord
     from app.models.workout import WorkoutSession
     from app.models.progress import ProgressRecord
     from app.models.chat import ChatConversation, ChatMessage
@@ -93,6 +93,11 @@ class User(Base):
     )
     intake_records: Mapped[List[IntakeRecord]] = relationship(
         "IntakeRecord",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    water_intake_records: Mapped[List[WaterIntakeRecord]] = relationship(
+        "WaterIntakeRecord",
         back_populates="user",
         cascade="all, delete-orphan",
     )

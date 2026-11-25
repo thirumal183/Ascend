@@ -184,17 +184,19 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => setSimulateError(!simulateError)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-xl border transition-colors ${
-              simulateError
-                ? 'bg-rose-50 border-rose-300 text-rose-800'
-                : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            {simulateError ? 'Test Error: Active' : 'Test Error State'}
-          </button>
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              onClick={() => setSimulateError(!simulateError)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-xl border transition-colors ${
+                simulateError
+                  ? 'bg-rose-50 border-rose-300 text-rose-800'
+                  : 'bg-white border-slate-200 text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              {simulateError ? 'Test Error: Active' : 'Test Error State'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -239,7 +241,7 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
         {/* Chat Top Bar */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-sky-600 text-white flex items-center justify-center">
+            <div className="h-9 w-9 rounded-xl bg-[#0A1628] text-blue-300 border border-blue-500/20 flex items-center justify-center">
               <Sparkles className="h-4 w-4" />
             </div>
             <div>
@@ -282,6 +284,33 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
 
         {/* Conversation History */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {messages.length === 0 && (
+            <div className="h-full min-h-[260px] flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-3 py-8">
+              <div className="h-11 w-11 rounded-2xl bg-blue-50 border border-blue-200 text-[#2563EB] flex items-center justify-center">
+                <Bot className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-display text-base font-bold text-[#0A1628]">
+                  Ask anything about today’s fuel & training
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Grounded in your active <strong className="text-[#0A1628]">{userProfile.pathway}</strong> targets ({goals.dailyCalories.toLocaleString()} kcal · {goals.proteinG}g protein) and logged entries.
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2 pt-2">
+                {pathwayPrompts.slice(0, 3).map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => handleSendMessage(q)}
+                    className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-blue-50 text-[#0A1628] hover:text-[#1D4ED8] text-xs font-medium border border-slate-200 hover:border-blue-200 transition-colors"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {messages.map((msg) => {
             const isUser = msg.role === 'user';
             return (
@@ -456,7 +485,7 @@ export const AiCoachView: React.FC<AiCoachViewProps> = ({
             <button
               type="submit"
               disabled={!inputPrompt.trim() || isGenerating}
-              className="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 active:scale-[0.99] disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-all inline-flex items-center gap-1.5 shrink-0"
+              className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] active:scale-[0.99] disabled:opacity-50 text-white text-xs font-semibold rounded-xl transition-all inline-flex items-center gap-1.5 shrink-0"
             >
               <Send className="h-3.5 w-3.5" />
               <span>Send</span>

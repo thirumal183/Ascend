@@ -78,15 +78,19 @@ class LoginRequest(BaseModel):
 
 
 class TokenRefreshRequest(BaseModel):
-    """Refresh token rotation exchange request."""
+    """Refresh token rotation exchange request (optional in body when using HttpOnly cookie)."""
 
-    refreshToken: str = Field(description="Active opaque refresh token string")
+    refreshToken: Optional[str] = Field(
+        default=None,
+        description="Active opaque refresh token string (optional when HttpOnly cookie is present)",
+    )
 
 
 class LogoutRequest(BaseModel):
     """Logout request optionally scoping revocation to a single device session."""
 
     refreshToken: Optional[str] = Field(default=None, description="Opaque refresh token of the logging-out device")
+    logoutAll: bool = Field(default=False, description="When true, revokes all active sessions and bumps jwt_version")
 
 
 class SessionItem(BaseModel):
@@ -156,3 +160,15 @@ class AuthMeResponse(BaseModel):
     account: UserResponse
     userProfile: Optional[UserProfileResponse] = None
     nutritionGoals: Optional[NutritionGoalResponse] = None
+
+
+class VerifyPasswordRequest(BaseModel):
+    """Request payload to re-verify the current user's password for sensitive actions."""
+
+    password: str = Field(..., min_length=1, max_length=128)
+
+
+class VerifyPasswordResponse(BaseModel):
+    """Safe confirmation response for password verification."""
+
+    verified: bool = True

@@ -117,6 +117,12 @@ class ExerciseItem(Base):
     rest_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=60, server_default=text("60"))
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
 
     __table_args__ = (
         CheckConstraint("default_sets > 0", name="ck_exercise_sets"),
@@ -124,6 +130,7 @@ class ExerciseItem(Base):
     )
 
     # Relationships
+    creator: Mapped[Optional[User]] = relationship("User")
     workout_plan: Mapped[WorkoutPlan] = relationship("WorkoutPlan", back_populates="exercises")
     set_logs: Mapped[List[ExerciseSetLog]] = relationship("ExerciseSetLog", back_populates="exercise_item")
 

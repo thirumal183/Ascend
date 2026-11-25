@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Check,
   ChevronDown,
@@ -66,6 +66,15 @@ export const ProgressTrackingView: React.FC<ProgressTrackingViewProps> = ({
     String(latest?.chestCm ?? 102.5)
   );
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showLogModal) {
+      setWeightInput(String(latest?.weightKg ?? userProfile.currentWeightKg));
+      setBodyFatInput(String(latest?.bodyFatPct ?? 14.0));
+      setWaistInput(String(latest?.waistCm ?? 79.5));
+      setChestInput(String(latest?.chestCm ?? 102.5));
+    }
+  }, [latest?.id, latest?.weightKg, latest?.bodyFatPct, latest?.waistCm, latest?.chestCm, userProfile.currentWeightKg, showLogModal]);
 
   const filteredBySource = progressHistory.filter((r) => {
     if (sourceFilter === 'all') return true;

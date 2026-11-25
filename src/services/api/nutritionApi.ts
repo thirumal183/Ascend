@@ -123,6 +123,35 @@ export interface DailyTotals {
   fiberG?: number | null;
   sodiumMg?: number | null;
   waterMl: number;
+  waterTargetMl?: number;
+}
+
+export interface WaterIntakeRecord {
+  id: string;
+  userId: string;
+  amountMl: number;
+  dateLogged: string;
+  loggedAt: string;
+  notes?: string | null;
+  createdAt: string;
+}
+
+export interface DailyWaterResponse {
+  dateIso: string;
+  totalMl: number;
+  targetMl: number;
+  records: WaterIntakeRecord[];
+}
+
+export interface CreateWaterIntakePayload {
+  amountMl: number;
+  dateIso: string;
+  notes?: string | null;
+}
+
+export interface UpdateWaterIntakePayload {
+  amountMl: number;
+  notes?: string | null;
 }
 
 export interface DailyIntakeResponse {
@@ -210,5 +239,29 @@ export const nutritionApi = {
 
   async getIntakeReports(days: number = 7): Promise<IntakeReportResponse> {
     return apiClient<IntakeReportResponse>(`/intake/reports?days=${days}`);
+  },
+
+  async getDailyWater(dateIso: string): Promise<DailyWaterResponse> {
+    return apiClient<DailyWaterResponse>(`/intake/water?date_iso=${dateIso}`);
+  },
+
+  async logWater(payload: CreateWaterIntakePayload): Promise<WaterIntakeRecord> {
+    return apiClient<WaterIntakeRecord>('/intake/water', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateWater(recordId: string, payload: UpdateWaterIntakePayload): Promise<WaterIntakeRecord> {
+    return apiClient<WaterIntakeRecord>(`/intake/water/${recordId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteWater(recordId: string): Promise<void> {
+    await apiClient<void>(`/intake/water/${recordId}`, {
+      method: 'DELETE',
+    });
   },
 };

@@ -50,6 +50,7 @@ import {
   onAuthFailure,
   getStoredAccessToken,
   getStoredRefreshToken,
+  hasLiveSessionHint,
   clearStoredTokens,
 } from './services/api';
 import {
@@ -142,7 +143,20 @@ export default function App() {
   const [showLandingPage, setShowLandingPage] = useState<boolean>(
     !savedSession?.account?.isAuthenticated
   );
-  const [showStartupIntro, setShowStartupIntro] = useState<boolean>(true);
+  const [showStartupIntro, setShowStartupIntro] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    if (
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  const handleDismissStartupIntro = () => {
+    setShowStartupIntro(false);
+  };
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
   const [pathwayModalOpen, setPathwayModalOpen] = useState(false);
@@ -220,8 +234,11 @@ export default function App() {
         setLiveWorkoutSessions([]);
       }
 
-      if (intakeRes.status === 'fulfilled' && intakeRes.value.records) {
-        setIntakeRecords(intakeRes.value.records.map(mapBackendIntakeRecordToFrontend));
+      if (intakeRes.status === 'fulfilled') {
+        if (intakeRes.value.records) {
+          setIntakeRecords(intakeRes.value.records.map(mapBackendIntakeRecordToFrontend));
+        }
+        setWaterIntakeMl(intakeRes.value.dailyTotals?.waterMl ?? 0);
       }
 
       if (progRes.status === 'fulfilled') {
@@ -291,7 +308,16 @@ export default function App() {
     };
 
     const recoverLiveSession = async () => {
-      const token = getStoredAccessToken();
+      let token = getStoredAccessToken();
+      if (!token && hasLiveSessionHint()) {
+        try {
+          const refreshed = await authApi.refresh();
+          token = refreshed.accessToken;
+        } catch {
+          clearStoredTokens();
+          return;
+        }
+      }
       if (!token) return;
 
       try {
@@ -409,9 +435,9 @@ export default function App() {
   // Sign Out / Revoke Session
   const handleSignOut = async () => {
     const rt = getStoredRefreshToken();
-    if (rt) {
+    if (userAccount.isAuthenticated && !userAccount.isDemoAccount) {
       try {
-        await authApi.logout(rt);
+        await authApi.logout(rt ?? undefined);
       } catch {
         // Continue clean local sign out
       }
@@ -495,8 +521,11 @@ export default function App() {
           setLiveWorkoutSessions([]);
         }
 
-        if (intakeRes.status === 'fulfilled' && intakeRes.value.records) {
-          setIntakeRecords(intakeRes.value.records.map(mapBackendIntakeRecordToFrontend));
+        if (intakeRes.status === 'fulfilled') {
+          if (intakeRes.value.records) {
+            setIntakeRecords(intakeRes.value.records.map(mapBackendIntakeRecordToFrontend));
+          }
+          setWaterIntakeMl(intakeRes.value.dailyTotals?.waterMl ?? 0);
         }
         if (progRes.status === 'fulfilled') {
           const mappedProg = progRes.value.map(mapBackendProgressRecordToFrontend);
@@ -880,8 +909,38 @@ export default function App() {
   };
 
   // Water Handler
-  const handleUpdateWater = (deltaMl: number) => {
+  const handleUpdateWater = async (deltaMl: number) => {
     setWaterIntakeMl((prev) => Math.max(0, prev + deltaMl));
+
+    if (usingDemoData || !userAccount.isAuthenticated || userAccount.isDemoAccount || deltaMl === 0) {
+      return;
+    }
+
+    const todayIso = getLocalDateIso();
+    try {
+      if (deltaMl > 0) {
+        await nutritionApi.logWater({ amountMl: deltaMl, dateIso: todayIso });
+      } else {
+        const daily = await nutritionApi.getDailyWater(todayIso);
+        let remaining = Math.abs(deltaMl);
+        const ordered = [...daily.records].reverse();
+        for (const rec of ordered) {
+          if (remaining <= 0) break;
+          if (rec.amountMl <= remaining) {
+            await nutritionApi.deleteWater(rec.id);
+            remaining -= rec.amountMl;
+          } else {
+            await nutritionApi.updateWater(rec.id, { amountMl: rec.amountMl - remaining });
+            remaining = 0;
+          }
+        }
+      }
+      const refreshed = await nutritionApi.getDailyWater(todayIso);
+      setWaterIntakeMl(refreshed.totalMl);
+    } catch (err) {
+      console.error('Failed to persist water intake:', err);
+      setWaterIntakeMl((prev) => Math.max(0, prev - deltaMl));
+    }
   };
 
   // Workout Persistence Helper for Live Mode
@@ -993,10 +1052,39 @@ export default function App() {
     }
   };
 
-  const handleAddExercise = (
+  const handleAddExercise = async (
     workoutId: string,
     exercise: Omit<ExerciseItem, 'id'>
   ) => {
+    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
+      try {
+        const created = await workoutApi.addExerciseToPlan(workoutId, {
+          name: exercise.name,
+          muscleGroup: exercise.muscleGroup,
+          defaultSets: exercise.sets,
+          defaultReps: exercise.reps,
+          defaultLoadKg: exercise.loadKg,
+          restSeconds: exercise.restSeconds,
+          notes: exercise.notes,
+        });
+        const persistedEx: ExerciseItem = {
+          ...exercise,
+          id: created.id,
+        };
+        setWorkoutPlans((prev) =>
+          prev.map((plan) =>
+            plan.id === workoutId
+              ? { ...plan, exercises: [...plan.exercises, persistedEx] }
+              : plan
+          )
+        );
+        return;
+      } catch (err) {
+        console.error('Failed to persist ad-hoc exercise:', err);
+        return;
+      }
+    }
+
     const newEx: ExerciseItem = {
       ...exercise,
       id: `ex-${Date.now()}`,
@@ -1021,7 +1109,6 @@ export default function App() {
     if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
       try {
         await usersApi.updateProfile({
-          pathway: mapFrontendPathwayToBackend(nextProfile.pathway),
           archetype: mapFrontendArchetypeToBackend(nextProfile.archetype),
           goalType: mapFrontendGoalTypeToBackend(nextProfile.goalType),
           biologicalSex: nextProfile.biologicalSex || 'unspecified',
@@ -1057,8 +1144,16 @@ export default function App() {
     }
   };
 
-  // Switch Pathway in Settings without losing historical records
-  const handleChangePathway = async (pathway: OnboardingPathway) => {
+  // Demo-only quick pathway switch (never mutates a live authenticated account)
+  const handleChangePathway = (pathway: OnboardingPathway) => {
+    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
+      setGlobalBanner({
+        type: 'error',
+        message: 'Authenticated accounts must change pathways in Account & Settings with password confirmation.',
+      });
+      setActiveTab(NavigationTab.Settings);
+      return;
+    }
     const defaultGoalMap: Record<OnboardingPathway, FitnessGoalType> = {
       [OnboardingPathway.GeneralFitness]: FitnessGoalType.WeightLoss,
       [OnboardingPathway.AthletePerformance]: FitnessGoalType.AthleticPerformance,
@@ -1075,36 +1170,73 @@ export default function App() {
     };
     setUserProfile(nextProfile);
     setGoals(computeRecommendedTargets(nextProfile));
+    setProgressHistory(
+      pathway === OnboardingPathway.MuscleGain
+        ? MUSCLE_GAIN_PROGRESS_HISTORY
+        : INITIAL_PROGRESS_HISTORY
+    );
+  };
 
-    if (!usingDemoData && userAccount.isAuthenticated && !userAccount.isDemoAccount) {
-      try {
-        const res = await usersApi.switchPathway({
-          pathway: mapFrontendPathwayToBackend(pathway),
-          archetype: mapFrontendArchetypeToBackend(nextProfile.archetype),
-          goalType: mapFrontendGoalTypeToBackend(nextProfile.goalType),
-          recalculateGoals: true,
-        });
-        setGoals({
-          dailyCalories: res.nutritionGoals.dailyCalories,
-          proteinG: res.nutritionGoals.proteinG,
-          carbsG: res.nutritionGoals.carbsG,
-          fatG: res.nutritionGoals.fatG,
-          waterMl: res.nutritionGoals.waterMl,
-          dailySteps: res.nutritionGoals.dailySteps,
-          weeklyWorkoutSessions: res.nutritionGoals.weeklyWorkoutSessions,
-          weeklyActivityMinutes: res.nutritionGoals.weeklyActivityMinutes,
-        });
-        setGlobalBanner({
-          type: 'success',
-          message: `Switched pathway to ${pathway} and recalculated targets.`,
-        });
-      } catch (err: any) {
-        setGlobalBanner({
-          type: 'error',
-          message: `Failed to switch pathway: ${err.message}`,
-        });
-      }
+  const handleVerifyAccountPassword = async (password: string): Promise<void> => {
+    await authApi.verifyPassword(password);
+  };
+
+  // Password-verified pathway change for real authenticated accounts (preserves all history)
+  const handleAuthenticatedChangePathway = async (
+    pathway: OnboardingPathway,
+    currentPassword: string
+  ): Promise<void> => {
+    const defaultGoalMap: Record<OnboardingPathway, FitnessGoalType> = {
+      [OnboardingPathway.GeneralFitness]: FitnessGoalType.WeightLoss,
+      [OnboardingPathway.AthletePerformance]: FitnessGoalType.AthleticPerformance,
+      [OnboardingPathway.MuscleGain]: FitnessGoalType.MuscleGain,
+    };
+    const nextArchetype =
+      pathway === OnboardingPathway.AthletePerformance
+        ? ProfileArchetype.Athlete
+        : ProfileArchetype.GeneralFitness;
+    const nextGoalType = defaultGoalMap[pathway];
+
+    const res = await usersApi.switchPathway({
+      pathway: mapFrontendPathwayToBackend(pathway),
+      currentPassword,
+      archetype: mapFrontendArchetypeToBackend(nextArchetype),
+      goalType: mapFrontendGoalTypeToBackend(nextGoalType),
+      recalculateGoals: true,
+    });
+
+    const refreshedMe = await authApi.getMe();
+    const mapped = mapAuthMeToUserState(refreshedMe);
+    setUserAccount(mapped.account);
+    if (mapped.userProfile) {
+      setUserProfile(mapped.userProfile);
+    } else {
+      setUserProfile((prev) => ({
+        ...prev,
+        pathway,
+        archetype: nextArchetype,
+        goalType: nextGoalType,
+      }));
     }
+    if (mapped.goals) {
+      setGoals(mapped.goals);
+    } else {
+      setGoals({
+        dailyCalories: res.nutritionGoals.dailyCalories,
+        proteinG: res.nutritionGoals.proteinG,
+        carbsG: res.nutritionGoals.carbsG,
+        fatG: res.nutritionGoals.fatG,
+        waterMl: res.nutritionGoals.waterMl,
+        dailySteps: res.nutritionGoals.dailySteps,
+        weeklyWorkoutSessions: res.nutritionGoals.weeklyWorkoutSessions,
+        weeklyActivityMinutes: res.nutritionGoals.weeklyActivityMinutes,
+      });
+    }
+
+    setGlobalBanner({
+      type: 'success',
+      message: `Account pathway changed to ${pathway} and targets updated. Historical records preserved.`,
+    });
   };
 
   // Progress Checkpoint Handler
@@ -1232,18 +1364,26 @@ export default function App() {
     setUsingDemoData(true);
   };
 
-  // Public Product Landing Page & Integrated Modern Auth/Onboarding Modals
+  // Public Home Experience & Integrated Auth/Onboarding Modals
   if (showLandingPage || !userAccount.isAuthenticated || !userAccount.onboardingCompleted) {
     return (
       <>
         {showStartupIntro && (
-          <StartupIntro onComplete={() => setShowStartupIntro(false)} />
+          <StartupIntro onComplete={handleDismissStartupIntro} />
         )}
 
         <LandingPageView
+          userAccount={userAccount}
+          userProfile={userProfile}
           onStartOnboarding={handleOpenSignUp}
           onOpenSignIn={handleOpenSignIn}
           onExploreDemo={handleDirectDemoEntry}
+          onSelectPathway={(pw) => setSelectedOnboardingPathway(pw)}
+          onReturnToDashboard={(tab) => {
+            if (tab) setActiveTab(tab);
+            setShowLandingPage(false);
+          }}
+          onSignOut={handleSignOut}
         />
 
         <AuthModal
@@ -1286,31 +1426,38 @@ export default function App() {
   const pathwayWorkout =
     workoutPlans.find((p) => p.recommendedPathway === userProfile.pathway) ||
     workoutPlans[0];
+  const isDemoMode = usingDemoData || Boolean(userAccount.isDemoAccount);
 
   return (
-    <div className="min-h-screen flex bg-slate-50/80 text-slate-900 selection:bg-sky-500/20 selection:text-sky-950">
+    <div className="min-h-screen flex bg-[#F8FAFC] text-[#0F172A] selection:bg-blue-600/15 selection:text-blue-950">
+      {showStartupIntro && (
+        <StartupIntro onComplete={handleDismissStartupIntro} />
+      )}
       {/* Desktop Navigation Sidebar */}
       <Sidebar
         activeTab={activeTab}
         userAccount={userAccount}
         userProfile={userProfile}
+        usingDemoData={usingDemoData}
         onSelectTab={(tab) => handleNavigate(tab)}
         onSignOut={handleSignOut}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
         onViewLandingPage={() => setShowLandingPage(true)}
-        onSwitchPathway={() => setPathwayModalOpen(true)}
+        onSwitchPathway={isDemoMode ? () => setPathwayModalOpen(true) : undefined}
       />
 
       <div className="flex-1 flex flex-col min-w-0">
         <TopHeader
           activeTab={activeTab}
+          userAccount={userAccount}
           userProfile={userProfile}
           usingDemoData={usingDemoData}
           onSelectTab={(tab) => handleNavigate(tab)}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
           onViewLandingPage={() => setShowLandingPage(true)}
-          onSwitchPathway={() => setPathwayModalOpen(true)}
+          onSwitchPathway={isDemoMode ? () => setPathwayModalOpen(true) : undefined}
+          onSignOut={handleSignOut}
         />
 
         {/* Global Toast Notification */}
@@ -1406,6 +1553,8 @@ export default function App() {
               <GoalsProfileView
                 userProfile={userProfile}
                 goals={goals}
+                canSwitchPathwayDirectly={isDemoMode}
+                onOpenSettings={() => handleNavigate(NavigationTab.Settings)}
                 onUpdateProfileAndGoals={handleUpdateProfileAndGoals}
               />
             )}
@@ -1453,6 +1602,8 @@ export default function App() {
                 userProfile={userProfile}
                 usingDemoData={usingDemoData}
                 onChangePathway={handleChangePathway}
+                onVerifyPassword={handleVerifyAccountPassword}
+                onChangePathwayWithPassword={handleAuthenticatedChangePathway}
                 onChangeUnitSystem={handleChangeUnitSystem}
                 onToggleDemoData={handleToggleDemoData}
                 onResetSampleData={handleResetSampleData}
@@ -1464,19 +1615,21 @@ export default function App() {
         </main>
       </div>
 
-      {/* Pathway Switcher Modal */}
-      <PathwaySelectionModal
-        isOpen={pathwayModalOpen}
-        selectedPathway={userProfile.pathway}
-        onSelectPathway={(pw) => {
-          handleChangePathway(pw);
-        }}
-        onConfirm={() => setPathwayModalOpen(false)}
-        onBackToLanding={() => setPathwayModalOpen(false)}
-      />
+      {/* Demo-only Pathway Switcher Modal */}
+      {isDemoMode && (
+        <PathwaySelectionModal
+          isOpen={pathwayModalOpen}
+          selectedPathway={userProfile.pathway}
+          onSelectPathway={(pw) => {
+            handleChangePathway(pw);
+          }}
+          onConfirm={() => setPathwayModalOpen(false)}
+          onBackToLanding={() => setPathwayModalOpen(false)}
+        />
+      )}
 
       {showStartupIntro && (
-        <StartupIntro onComplete={() => setShowStartupIntro(false)} />
+        <StartupIntro onComplete={handleDismissStartupIntro} />
       )}
     </div>
   );

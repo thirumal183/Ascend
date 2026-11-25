@@ -25,6 +25,7 @@ class ExerciseItemResponse(BaseModel):
     restSeconds: int
     notes: Optional[str] = None
     sortOrder: int
+    createdByUserId: Optional[uuid.UUID] = None
 
 
 class CreateExerciseItemRequest(BaseModel):
@@ -40,6 +41,21 @@ class CreateExerciseItemRequest(BaseModel):
     restSeconds: int = Field(default=60, ge=0)
     notes: Optional[str] = None
     sortOrder: int = Field(default=0)
+
+
+class UpdateExerciseItemRequest(BaseModel):
+    """Payload to update a user-created exercise item."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=150)
+    muscleGroup: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    defaultSets: Optional[int] = Field(default=None, gt=0, le=30)
+    defaultReps: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    defaultLoadKg: Optional[float] = Field(default=None, ge=0.0, le=1000.0)
+    restSeconds: Optional[int] = Field(default=None, ge=0, le=600)
+    notes: Optional[str] = None
+    sortOrder: Optional[int] = Field(default=None, ge=0)
 
 
 class WorkoutPlanResponse(BaseModel):

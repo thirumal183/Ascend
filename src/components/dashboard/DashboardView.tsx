@@ -64,7 +64,7 @@ interface DashboardViewProps {
   userProfile: UserProfile;
   waterIntakeMl: number;
   onUpdateWater: (deltaMl: number) => void;
-  todayWorkout: WorkoutPlan;
+  todayWorkout?: WorkoutPlan;
   progressHistory: ProgressRecord[];
   usingDemoData: boolean;
   onLoadDemoData: () => void;
@@ -158,11 +158,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     };
   }, [dailyTotals, goals, waterIntakeMl]);
 
-  const completedExercises = todayWorkout.exercises.filter((e) => e.completed).length;
-  const totalExercises = todayWorkout.exercises.length;
-  const workoutPct = Math.round(
-    (completedExercises / Math.max(1, totalExercises)) * 100
-  );
+  const workoutExercises = todayWorkout?.exercises ?? [];
+  const completedExercises = workoutExercises.filter((e) => e.completed).length;
+  const totalExercises = workoutExercises.length;
+  const workoutPct = totalExercises > 0
+    ? Math.round((completedExercises / totalExercises) * 100)
+    : 0;
 
   const firstName = (userAccount.name || 'Friend').split(' ')[0];
 
@@ -212,7 +213,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         tag: 'Midday Fuel',
       };
     }
-    if (isAthlete && completedExercises === 0) {
+    if (isAthlete && completedExercises === 0 && todayWorkout) {
       return {
         title: 'Performance Training Scheduled',
         description: `${todayWorkout.title} (~${todayWorkout.estimatedMinutes}m) is scheduled. Consume pre-workout fuel.`,
@@ -340,41 +341,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Date Navigator */}
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <div className="inline-flex items-center gap-1 bg-white border border-slate-200/80 rounded-xl p-1 shadow-2xs">
+          <div className="inline-flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-2xs">
             <button
               type="button"
               onClick={() => setDateOffset((prev) => prev - 1)}
-              className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+              className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
               aria-label="Previous day"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <div className="flex items-center gap-2 px-3 py-1 text-xs font-semibold text-slate-800">
-              <Calendar className="h-3.5 w-3.5 text-sky-600" />
+            <div className="flex items-center gap-2 px-3 py-1 text-xs font-semibold text-[#0A1628]">
+              <Calendar className="h-3.5 w-3.5 text-[#2563EB]" />
               <span>{formattedDate}</span>
             </div>
             <button
               type="button"
               onClick={() => setDateOffset((prev) => prev + 1)}
-              className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+              className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
               aria-label="Next day"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setPreviewSkeleton(true)}
-            className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 px-2 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
-            title="Inspect loading skeleton state"
-          >
-            Skeletons
-          </button>
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              onClick={() => setPreviewSkeleton(true)}
+              className="text-[11px] font-semibold text-slate-500 hover:text-[#0A1628] px-2 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors"
+              title="Inspect loading skeleton state"
+            >
+              Skeletons
+            </button>
+          )}
         </div>
       </div>
 
       {/* Contextual Horizon Next-Action Card */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border border-slate-700/60 shadow-[0_4px_20px_-4px_rgba(15,23,42,0.15)] flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#0A1628] text-white border border-blue-500/20 shadow-[0_10px_28px_-6px_rgba(10,22,40,0.3)] flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
         <div className="flex items-center gap-3.5">
           <div
             className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${
@@ -459,17 +462,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       / {goals.dailyCalories.toLocaleString()} kcal target
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600 pt-0.5">
+                  <div className="pt-0.5">
                     {remainingCalories > 0 ? (
-                      <span className="font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      <span className="inline-flex items-center font-semibold text-xs text-emerald-800 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
                         {remainingCalories.toLocaleString()} kcal remaining for today
                       </span>
                     ) : (
-                      <span className="font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      <span className="inline-flex items-center font-semibold text-xs text-emerald-800 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
                         Daily calorie budget achieved!
                       </span>
                     )}
-                  </p>
+                  </div>
                 </div>
               </div>
 
@@ -701,8 +704,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </Card>
 
               {/* AI Guidance Card */}
-              <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-950 via-slate-900 to-[#0B1221] text-white border border-emerald-900/50 space-y-3.5 shadow-xs">
-                <div className="flex items-center justify-between text-xs text-emerald-400 font-semibold">
+              <div className="p-6 rounded-2xl bg-[#0A1628] text-white border border-emerald-500/25 space-y-3.5 shadow-sm">
+                <div className="flex items-center justify-between text-xs text-emerald-300 font-semibold">
                   <span className="flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5" />
                     <span>Everyday Nutrition Coaching</span>
@@ -715,7 +718,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Balance your evening meal for steady energy
                 </h4>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  You have {formatCalories(remainingCalories)} kcal and {formatGrams(remainingProtein)} protein remaining. Incorporating leafy greens, lentils or fish will fulfill your micronutrient targets without exceeding your calorie budget.
+                  {remainingCalories > 0 || remainingProtein > 0
+                    ? `You have ${formatCalories(remainingCalories)} kcal and ${formatGrams(remainingProtein)} protein remaining. Incorporating leafy greens, lentils or fish will fulfill your micronutrient targets without exceeding your calorie budget.`
+                    : 'Your daily calorie and protein targets are met. Prioritize hydration and light recovery before tomorrow’s routine.'}
                 </p>
                 <Button
                   variant="outline"
@@ -736,15 +741,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <span>Daily Movement Plan</span>
                   </span>
                   <Badge variant="slate" size="sm">
-                    {todayWorkout.estimatedMinutes} mins
+                    {todayWorkout ? `${todayWorkout.estimatedMinutes} mins` : 'Ready'}
                   </Badge>
                 </div>
-                <p className="text-xs font-semibold text-slate-900">
-                  {todayWorkout.title}
-                </p>
-                <p className="text-xs text-slate-500">
-                  Focus: {todayWorkout.focusArea} · {completedExercises}/{totalExercises} exercises done
-                </p>
+                {todayWorkout ? (
+                  <>
+                    <p className="text-xs font-semibold text-slate-900">
+                      {todayWorkout.title}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Focus: {todayWorkout.focusArea} · {completedExercises}/{totalExercises} exercises done
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Open Workouts to configure or sync your pathway movement routine.
+                  </p>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -777,15 +790,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <span>Priority Training Session</span>
                   </Badge>
                   <span className="text-xs text-sky-400 font-mono">
-                    ~{todayWorkout.estimatedMinutes} mins · {todayWorkout.intensityLabel} Intensity
+                    {todayWorkout
+                      ? `~${todayWorkout.estimatedMinutes} mins · ${todayWorkout.intensityLabel} Intensity`
+                      : 'Loading training plan...'}
                   </span>
                 </div>
                 <h2 className="font-display text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                  {todayWorkout.title}
+                  {todayWorkout ? todayWorkout.title : 'Athlete Performance Conditioning'}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
-                  Focus: <strong className="text-white">{todayWorkout.focusArea}</strong> · Expected Calorie Expenditure:{' '}
-                  <strong className="text-sky-300 font-mono">~{todayWorkout.targetCaloriesBurned} kcal</strong>
+                  {todayWorkout ? (
+                    <>
+                      Focus: <strong className="text-white">{todayWorkout.focusArea}</strong> · Expected Calorie Expenditure:{' '}
+                      <strong className="text-sky-300 font-mono">~{todayWorkout.targetCaloriesBurned} kcal</strong>
+                    </>
+                  ) : (
+                    'Open Workouts to view or log your structured training sets and recovery targets.'
+                  )}
                 </p>
                 <div className="flex items-center gap-3 pt-1">
                   <div className="h-2 w-48 rounded-full bg-slate-800 overflow-hidden">
@@ -804,16 +825,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <Button
                   variant="primary"
                   size="lg"
-                  className="w-full sm:w-auto bg-sky-500 hover:bg-sky-400 text-slate-950 font-black shadow-lg shadow-sky-500/25"
+                  className="w-full sm:w-auto !bg-[#2563EB] hover:!bg-[#1D4ED8] !text-white font-bold shadow-lg shadow-blue-600/25"
                   onClick={() => onNavigate(NavigationTab.Workouts)}
                   rightIcon={<ArrowRight className="h-4 w-4" />}
                 >
                   {completedExercises > 0 ? 'Resume Workout Runner' : 'Start Athletic Session'}
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="lg"
-                  className="w-full sm:w-auto border-slate-700 text-white hover:bg-slate-800"
+                  className="w-full sm:w-auto border border-white/25 bg-white/10 hover:bg-white/20 text-white"
                   onClick={() => onNavigate(NavigationTab.Diet)}
                 >
                   Log Fueling
@@ -963,8 +984,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {/* Right 5 cols: Performance AI Coach & Fluid Balance */}
             <div className="lg:col-span-5 space-y-6">
               {/* Athlete AI Guidance Card */}
-              <div className="p-6 rounded-2xl bg-[#070D18] text-white border border-sky-500/40 space-y-4 shadow-xl">
-                <div className="flex items-center justify-between text-xs text-sky-400 font-semibold">
+              <div className="p-6 rounded-2xl bg-[#0A1628] text-white border border-blue-500/30 space-y-4 shadow-sm">
+                <div className="flex items-center justify-between text-xs text-blue-300 font-semibold">
                   <span className="flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5" />
                     <span>Athletic Fueling Engine</span>
@@ -977,12 +998,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Carb intake pacing for today’s session
                 </h4>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  With {todayWorkout.title} scheduled, consume 45g of easily digestible carbohydrates 45 mins before your session. You still have {formatGrams(remainingCarbs)} of carbs in your daily budget.
+                  {todayWorkout
+                    ? `With ${todayWorkout.title} scheduled, consume 45g of easily digestible carbohydrates 45 mins before your session. You still have ${formatGrams(remainingCarbs)} of carbs in your daily budget.`
+                    : `Consume 45g of easily digestible carbohydrates 45 mins before training. You still have ${formatGrams(remainingCarbs)} of carbs in your daily budget.`}
                 </p>
                 <Button
                   variant="primary"
                   size="sm"
-                  className="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold"
+                  className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold"
                   onClick={() => onNavigate(NavigationTab.AiCoach)}
                   rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
                 >
@@ -993,8 +1016,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {/* Workout History Teaser */}
               <Card variant="default" className="p-5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <TrendingUp className="h-4 w-4 text-sky-600" />
+                  <span className="text-xs font-bold text-[#0A1628] flex items-center gap-1.5">
+                    <TrendingUp className="h-4 w-4 text-[#2563EB]" />
                     <span>Weekly Athletic Consistency</span>
                   </span>
                   <Badge variant="slate" size="sm">
@@ -1002,7 +1025,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </Badge>
                 </div>
                 <p className="text-xs text-slate-600">
-                  You’ve logged 4 sessions this week with consistent energy pacing.
+                  {usingDemoData
+                    ? 'Demo plan includes 4 scheduled sessions this week with structured energy pacing.'
+                    : `Target schedule: ${userProfile.trainingDaysPerWeek} sessions per week. Review completed sets in your calendar.`}
                 </p>
                 <Button
                   variant="outline"
@@ -1049,11 +1074,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </p>
                 <div className="pt-1">
                   {surplusKcal >= targetSurplusKcal ? (
-                    <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    <span className="inline-flex items-center text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
                       Optimal anabolic surplus achieved today!
                     </span>
                   ) : (
-                    <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                    <span className="inline-flex items-center text-xs font-semibold text-amber-800 bg-amber-50 px-3 py-1 rounded-xl border border-amber-200">
                       {remainingCalories.toLocaleString()} kcal left to guarantee muscle protein synthesis
                     </span>
                   )}
@@ -1268,7 +1293,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         Hypertrophy Routine
                       </h3>
                       <p className="text-xs text-slate-500">
-                        {todayWorkout.title}
+                        {todayWorkout ? todayWorkout.title : 'Configure routine in Workouts'}
                       </p>
                     </div>
                   </div>
@@ -1300,8 +1325,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
 
               {/* Muscle Gain AI Advice */}
-              <div className="p-6 rounded-2xl bg-gradient-to-br from-amber-950 via-slate-950 to-[#0B1221] text-white border border-amber-600/40 space-y-3.5 shadow-xl">
-                <div className="flex items-center justify-between text-xs text-amber-400 font-semibold">
+              <div className="p-6 rounded-2xl bg-[#0A1628] text-white border border-orange-500/30 space-y-3.5 shadow-sm">
+                <div className="flex items-center justify-between text-xs text-orange-300 font-semibold">
                   <span className="flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5" />
                     <span>Hypertrophy Coach</span>
@@ -1314,12 +1339,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Lock in your daily caloric surplus
                 </h4>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  You need {remainingCalories} more calories to guarantee an optimal anabolic environment for tonight’s muscle repair. Add a protein-dense dinner with peanut butter, paneer, or a mass gainer shake.
+                  {remainingCalories > 0
+                    ? `You need ${formatCalories(remainingCalories)} more calories to guarantee an optimal anabolic environment for tonight’s muscle repair. Add a protein-dense dinner with peanut butter, paneer, or a mass gainer shake.`
+                    : 'Your daily caloric surplus target is achieved. Maintain hydration and prioritize 7–9 hours of sleep for optimal muscle protein synthesis.'}
                 </p>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="w-full text-slate-950 bg-amber-400 hover:bg-amber-300 border-none font-bold"
+                  className="w-full text-[#0A1628] bg-orange-300 hover:bg-orange-200 border-none font-bold"
                   onClick={() => onNavigate(NavigationTab.AiCoach)}
                   rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
                 >

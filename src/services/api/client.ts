@@ -19,35 +19,68 @@ export class ApiError extends Error {
   }
 }
 
-const ACCESS_TOKEN_KEY = 'ascend_access_token';
-const REFRESH_TOKEN_KEY = 'ascend_refresh_token';
+const LEGACY_ACCESS_TOKEN_KEY = 'ascend_access_token';
+const LEGACY_REFRESH_TOKEN_KEY = 'ascend_refresh_token';
+const LIVE_SESSION_HINT_KEY = 'ascend_has_live_session';
 
-export const API_BASE_URL: string =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
-  'http://localhost:8000/api/v1';
+const isBrowserRuntime = typeof window !== 'undefined' && typeof document !== 'undefined';
+
+// Access token is kept strictly in memory (never persisted in localStorage)
+let inMemoryAccessToken: string | null = null;
+// Refresh token is managed via HttpOnly cookie in browsers; only kept in-memory for non-browser CLI test scripts
+let inMemoryCliRefreshToken: string | null = null;
+
+export function resolveApiBaseUrl(options: {
+  isBrowser?: boolean;
+  isProd?: boolean;
+  envBaseUrl?: string;
+} = {}): string {
+  const isBrowser = options.isBrowser ?? isBrowserRuntime;
+  const isProd =
+    options.isProd ?? (typeof import.meta !== 'undefined' && Boolean(import.meta.env?.PROD));
+  const envBase =
+    options.envBaseUrl ??
+    (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE_URL : undefined);
+
+  if (envBase && envBase.trim()) {
+    return envBase.trim();
+  }
+  if (isBrowser && isProd) {
+    return '/api/v1';
+  }
+  return 'http://localhost:8000/api/v1';
+}
+
+export const API_BASE_URL: string = resolveApiBaseUrl();
 
 // Token Storage
 export function getStoredAccessToken(): string | null {
-  try {
-    return localStorage.getItem(ACCESS_TOKEN_KEY);
-  } catch {
-    return null;
-  }
+  return inMemoryAccessToken;
 }
 
 export function getStoredRefreshToken(): string | null {
+  return isBrowserRuntime ? null : inMemoryCliRefreshToken;
+}
+
+export function hasLiveSessionHint(): boolean {
   try {
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
+    return typeof localStorage !== 'undefined' && localStorage.getItem(LIVE_SESSION_HINT_KEY) === '1';
   } catch {
-    return null;
+    return false;
   }
 }
 
 export function setStoredTokens(accessToken: string, refreshToken?: string): void {
+  inMemoryAccessToken = accessToken;
+  if (!isBrowserRuntime && refreshToken) {
+    inMemoryCliRefreshToken = refreshToken;
+  }
   try {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    if (refreshToken) {
-      localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(LIVE_SESSION_HINT_KEY, '1');
+      // Wipe any legacy localStorage tokens from prior versions
+      localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
+      localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
     }
   } catch {
     // Ignore storage quota errors
@@ -55,9 +88,14 @@ export function setStoredTokens(accessToken: string, refreshToken?: string): voi
 }
 
 export function clearStoredTokens(): void {
+  inMemoryAccessToken = null;
+  inMemoryCliRefreshToken = null;
   try {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(LIVE_SESSION_HINT_KEY);
+      localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
+      localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
+    }
   } catch {
     // Ignore storage errors
   }
@@ -91,17 +129,19 @@ function processQueue(error: unknown, token: string | null = null): void {
 
 async function executeTokenRefresh(): Promise<string> {
   const currentRefreshToken = getStoredRefreshToken();
-  if (!currentRefreshToken) {
+  if (!isBrowserRuntime && !currentRefreshToken) {
     throw new ApiError(401, 'No refresh token available', 'UNAUTHORIZED');
   }
 
   try {
     const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
       },
-      body: JSON.stringify({ refreshToken: currentRefreshToken }),
+      body: JSON.stringify(currentRefreshToken ? { refreshToken: currentRefreshToken } : {}),
     });
 
     if (!res.ok) {
@@ -138,6 +178,9 @@ export async function apiClient<T>(
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
+  if (!headers.has('X-Requested-With')) {
+    headers.set('X-Requested-With', 'XMLHttpRequest');
+  }
 
   if (!options.skipAuth) {
     const token = getStoredAccessToken();
@@ -150,6 +193,7 @@ export async function apiClient<T>(
   try {
     response = await fetch(url, {
       ...options,
+      credentials: 'include',
       headers,
     });
   } catch (netErr: any) {

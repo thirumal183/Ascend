@@ -238,3 +238,37 @@ class IntakeRecord(Base):
     # Relationships
     user: Mapped[User] = relationship("User", back_populates="intake_records")
     food: Mapped[Optional[FoodItem]] = relationship("FoodItem", back_populates="intake_records")
+
+
+class WaterIntakeRecord(Base):
+    """User-owned hydration log entry with daily aggregation support."""
+
+    __tablename__ = "water_intake_records"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    amount_ml: Mapped[int] = mapped_column(Integer, nullable=False)
+    date_logged: Mapped[date] = mapped_column(Date, nullable=False)
+    logged_at: Mapped[str] = mapped_column(String(16), nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        CheckConstraint("amount_ml > 0 AND amount_ml <= 5000", name="ck_water_amount_range"),
+        Index("idx_water_intake_user_date", "user_id", text("date_logged DESC")),
+    )
+
+    user: Mapped[User] = relationship("User", back_populates="water_intake_records")

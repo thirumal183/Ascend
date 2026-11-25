@@ -575,42 +575,44 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
                 <span>Compare ({comparisonFoodIds.length})</span>
               </button>
 
-              {/* Subtle State Tester for Demo Review */}
-              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs">
-                <button
-                  type="button"
-                  onClick={() => setCatalogState('normal')}
-                  className={`px-2 py-1 rounded font-medium transition-colors ${
-                    catalogState === 'normal'
-                      ? 'bg-white text-slate-900 shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  Normal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCatalogState('loading')}
-                  className={`px-2 py-1 rounded font-medium transition-colors ${
-                    catalogState === 'loading'
-                      ? 'bg-white text-slate-900 shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  Loading
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCatalogState('error')}
-                  className={`px-2 py-1 rounded font-medium transition-colors ${
-                    catalogState === 'error'
-                      ? 'bg-white text-slate-900 shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  Error
-                </button>
-              </div>
+              {/* Subtle State Tester for Demo Review (dev only) */}
+              {import.meta.env.DEV && (
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setCatalogState('normal')}
+                    className={`px-2 py-1 rounded font-medium transition-colors ${
+                      catalogState === 'normal'
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    Normal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCatalogState('loading')}
+                    className={`px-2 py-1 rounded font-medium transition-colors ${
+                      catalogState === 'loading'
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    Loading
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCatalogState('error')}
+                    className={`px-2 py-1 rounded font-medium transition-colors ${
+                      catalogState === 'error'
+                        ? 'bg-white text-slate-900 shadow-2xs'
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    Error
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -915,7 +917,7 @@ export const DietManagementView: React.FC<DietManagementViewProps> = ({
                     aria-pressed={selectedMeal === m}
                     className={`py-2 px-2 text-xs font-semibold rounded-xl border transition-all ${
                       selectedMeal === m
-                        ? 'bg-slate-900 text-white border-slate-900'
+                        ? 'bg-[#0A1628] text-white border-[#0A1628]'
                         : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
                   >

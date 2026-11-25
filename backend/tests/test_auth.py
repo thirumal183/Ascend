@@ -415,7 +415,11 @@ async def test_logout_flows(async_client: AsyncClient):
     fresh_access = fresh_login.json()["accessToken"]
     fresh_headers = {"Authorization": f"Bearer {fresh_access}"}
 
-    global_logout = await async_client.post("/api/v1/auth/logout", headers=fresh_headers)
+    global_logout = await async_client.post(
+        "/api/v1/auth/logout",
+        json={"logoutAll": True},
+        headers=fresh_headers,
+    )
     assert global_logout.status_code == 200
 
     # Old JWT with stale jwt_version should now fail on protected routes!
@@ -524,10 +528,14 @@ async def test_users_profile_pathway_and_goals_endpoints(async_client: AsyncClie
     assert reg_res.status_code == 201
     headers = {"Authorization": f"Bearer {reg_res.json()['tokens']['accessToken']}"}
 
-    # Switch pathway to Weight Gain & Muscle Gain
+    # Switch pathway to Weight Gain & Muscle Gain (requires currentPassword)
     pw_res = await async_client.post(
         "/api/v1/users/me/pathway",
-        json={"pathway": PathwayType.MUSCLE_GAIN.value, "recalculateGoals": True},
+        json={
+            "pathway": PathwayType.MUSCLE_GAIN.value,
+            "currentPassword": "StrongPassword123!",
+            "recalculateGoals": True,
+        },
         headers=headers,
     )
     assert pw_res.status_code == 200
@@ -630,3 +638,203 @@ async def test_wave2_security_hardening_rate_limit_password_limit_and_lineage(as
     finally:
         settings.RATE_LIMIT_ENABLED = False
         await rate_limiter.reset()
+
+
+@pytest.mark.asyncio
+async def test_httponly_refresh_cookie_and_csrf_protection(async_client: AsyncClient):
+    """Verifies HttpOnly refresh cookie issuance, CSRF header enforcement, rotation, and logout clearing."""
+    unique_suffix = uuid.uuid4().hex[:8]
+    email = f"cookie_{unique_suffix}@ascend.io"
+    password = "CookiePassword123!"
+
+    reg_res = await async_client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": password,
+            "fullName": "Cookie Tester",
+            "pathway": PathwayType.GENERAL_NUTRITION.value,
+            "archetype": Archetype.GENERAL_FITNESS.value,
+            "goalType": GoalType.WEIGHT_MAINTENANCE.value,
+            "biologicalSex": BiologicalSex.FEMALE.value,
+            "currentWeightKg": 62.0,
+            "targetWeightKg": 62.0,
+            "heightCm": 165.0,
+            "age": 27,
+            "activityLevel": ActivityLevel.MODERATELY_ACTIVE.value,
+            "unitSystem": UnitSystem.METRIC.value,
+            "trainingDaysPerWeek": 3,
+        },
+    )
+    assert reg_res.status_code == 201
+    set_cookie_header = reg_res.headers.get("set-cookie", "")
+    assert "ascend_refresh_token=" in set_cookie_header
+    assert "httponly" in set_cookie_header.lower()
+
+    # Cookie-based refresh without X-Requested-With CSRF header must fail with 403
+    csrf_fail = await async_client.post("/api/v1/auth/refresh", json={})
+    assert csrf_fail.status_code == 403
+
+    # Cookie-based refresh WITH X-Requested-With header succeeds and rotates token
+    csrf_ok = await async_client.post(
+        "/api/v1/auth/refresh",
+        json={},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert csrf_ok.status_code == 200
+    rotated_access = csrf_ok.json()["accessToken"]
+    assert "ascend_refresh_token=" in csrf_ok.headers.get("set-cookie", "")
+
+    # Cookie-based logout WITH Authorization + X-Requested-With succeeds and revokes session
+    logout_ok = await async_client.post(
+        "/api/v1/auth/logout",
+        json={},
+        headers={
+            "Authorization": f"Bearer {rotated_access}",
+            "X-Requested-With": "XMLHttpRequest",
+        },
+    )
+    assert logout_ok.status_code == 200
+
+    # Refresh after logout must fail
+    post_logout_refresh = await async_client.post(
+        "/api/v1/auth/refresh",
+        json={},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    assert post_logout_refresh.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_production_same_origin_cookie_attributes(async_client: AsyncClient):
+    """Verifies HttpOnly, Secure, SameSite=Lax, and Path=/api/v1/auth in production."""
+    from app.api.v1.endpoints.auth import _cookie_security_params
+
+    original_env = settings.ENVIRONMENT
+    try:
+        settings.ENVIRONMENT = "production"
+        params = _cookie_security_params()
+        assert params["httponly"] is True
+        assert params["secure"] is True
+        assert params["samesite"] == "lax"
+        assert params["path"] == "/api/v1/auth"
+    finally:
+        settings.ENVIRONMENT = original_env
+
+
+@pytest.mark.asyncio
+async def test_pathway_change_password_verification_and_history_preservation(async_client: AsyncClient):
+    """Verifies password confirmation requirement for pathway changes, bypass prevention, and record preservation."""
+    from datetime import date
+
+    unique_suffix = uuid.uuid4().hex[:8]
+    password = "PathwayPassword123!"
+    reg_res = await async_client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": f"pw_verify_{unique_suffix}@ascend.io",
+            "password": password,
+            "fullName": "Pathway Verifier",
+            "pathway": PathwayType.GENERAL_NUTRITION.value,
+            "archetype": Archetype.GENERAL_FITNESS.value,
+            "goalType": GoalType.WEIGHT_LOSS.value,
+            "biologicalSex": BiologicalSex.MALE.value,
+            "currentWeightKg": 76.0,
+            "targetWeightKg": 72.0,
+            "heightCm": 176.0,
+            "age": 28,
+            "activityLevel": ActivityLevel.MODERATELY_ACTIVE.value,
+            "unitSystem": UnitSystem.METRIC.value,
+            "trainingDaysPerWeek": 4,
+        },
+    )
+    assert reg_res.status_code == 201
+    access_token = reg_res.json()["tokens"]["accessToken"]
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # Seed historical data (water + progress) that must be preserved after pathway change
+    today_iso = date.today().isoformat()
+    w_res = await async_client.post(
+        "/api/v1/intake/water",
+        json={"amountMl": 500, "dateIso": today_iso},
+        headers=headers,
+    )
+    assert w_res.status_code == 201
+    p_res = await async_client.post(
+        "/api/v1/progress/records",
+        json={"dateLogged": today_iso, "weightKg": 76.0},
+        headers=headers,
+    )
+    assert p_res.status_code in (200, 201)
+
+    # 1. Unauthenticated access rejected
+    unauth_verify = await async_client.post("/api/v1/auth/verify-password", json={"password": password})
+    assert unauth_verify.status_code == 401
+    unauth_pw = await async_client.post(
+        "/api/v1/users/me/pathway",
+        json={"pathway": PathwayType.ATHLETE_PERFORMANCE.value, "currentPassword": password},
+    )
+    assert unauth_pw.status_code == 401
+
+    # 2. Missing currentPassword -> 422
+    missing_pw = await async_client.post(
+        "/api/v1/users/me/pathway",
+        json={"pathway": PathwayType.ATHLETE_PERFORMANCE.value},
+        headers=headers,
+    )
+    assert missing_pw.status_code == 422
+
+    # 3. Incorrect password -> 401 on /verify-password and /me/pathway; pathway remains unchanged
+    bad_verify = await async_client.post(
+        "/api/v1/auth/verify-password",
+        json={"password": "WrongPassword!"},
+        headers=headers,
+    )
+    assert bad_verify.status_code == 401
+
+    bad_pw = await async_client.post(
+        "/api/v1/users/me/pathway",
+        json={"pathway": PathwayType.ATHLETE_PERFORMANCE.value, "currentPassword": "WrongPassword!"},
+        headers=headers,
+    )
+    assert bad_pw.status_code == 401
+
+    # 4. Attempt to bypass via PUT /users/me/profile -> 403 Forbidden
+    bypass_res = await async_client.put(
+        "/api/v1/users/me/profile",
+        json={"pathway": PathwayType.ATHLETE_PERFORMANCE.value},
+        headers=headers,
+    )
+    assert bypass_res.status_code == 403
+
+    me_before = await async_client.get("/api/v1/auth/me", headers=headers)
+    assert me_before.json()["userProfile"]["pathway"] == PathwayType.GENERAL_NUTRITION.value
+
+    # 5. Valid password verification + atomic pathway change
+    ok_verify = await async_client.post(
+        "/api/v1/auth/verify-password",
+        json={"password": password},
+        headers=headers,
+    )
+    assert ok_verify.status_code == 200
+    assert ok_verify.json()["verified"] is True
+
+    ok_pw = await async_client.post(
+        "/api/v1/users/me/pathway",
+        json={
+            "pathway": PathwayType.ATHLETE_PERFORMANCE.value,
+            "currentPassword": password,
+            "recalculateGoals": True,
+        },
+        headers=headers,
+    )
+    assert ok_pw.status_code == 200
+    assert ok_pw.json()["userProfile"]["pathway"] == PathwayType.ATHLETE_PERFORMANCE.value
+
+    # 6. Historical water and progress records preserved intact
+    water_after = await async_client.get(f"/api/v1/intake/water?date_iso={today_iso}", headers=headers)
+    assert water_after.status_code == 200
+    assert water_after.json()["totalMl"] == 500
+    prog_after = await async_client.get("/api/v1/progress/records", headers=headers)
+    assert prog_after.status_code == 200
+    assert len(prog_after.json()) >= 1
