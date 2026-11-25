@@ -5,7 +5,7 @@
 ![React 19](https://img.shields.io/badge/Frontend-React%2019%20%2B%20TypeScript-2563EB)
 ![FastAPI](https://img.shields.io/badge/Backend-FastAPI%20%2B%20SQLAlchemy%202.0-0A1628)
 ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL%2016%2B%20(3NF)-15803D)
-![Deployment](https://img.shields.io/badge/Status-Deployment%20in%20Progress-7C3AED)
+![Status](https://img.shields.io/badge/Status-Live%20in%20Production-22C55E)
 
 ASCEND is a full-stack nutrition, workout, and biometric tracking platform built to adapt to distinct personal fitness goals. It combines Mifflin-St Jeor energy modeling, Third Normal Form (3NF) food and nutrient storage, per-set workout telemetry, hydration tracking, and goal-aware AI coaching inside one cohesive web application.
 
@@ -13,11 +13,16 @@ Generic calorie trackers often apply a single formula to everyone, overwrite his
 
 ---
 
-## Deployment Status
+## Production Deployment
 
-`Status: Deployment in Progress (Vercel + Render + Neon)`
+| Service | URL | Status |
+| :--- | :--- | :--- |
+| **Frontend** | [ascend-six-iota.vercel.app](https://ascend-six-iota.vercel.app/) | ✅ Live |
+| **Backend API** | [ascend-api-3zkt.onrender.com](https://ascend-api-3zkt.onrender.com/api/v1/health) | ✅ Live |
+| **Database** | Neon PostgreSQL — production branch | ✅ Connected |
 
-Production deployment has not yet been executed. See [docs/DEPLOYMENT_GUIDE.md](./docs/DEPLOYMENT_GUIDE.md) for the locked deployment architecture and pre-launch Neon seeding steps.
+> [!NOTE]
+> The Render backend runs on a **free-tier instance** that sleeps after 15 minutes of inactivity. The first request after a cold start may take 30–60 seconds while Render wakes the service. Subsequent requests are fast. The Vercel proxy has a 25-second timeout; a cold start may cause the initial request to time out — simply retry after a few seconds.
 
 ---
 
@@ -70,7 +75,7 @@ flowchart LR
 
 ## Database Design
 
-ASCEND uses a **16-table normalized PostgreSQL schema** plus **1 database view** (`v_food_items_with_nutrients`), managed with **Alembic** (current head: `e7f8a9b0c1d2`):
+ASCEND uses a **16-table normalized PostgreSQL schema** plus **1 database view** (`v_food_items_with_nutrients`), managed with **Alembic** (current migration head: `e7f8a9b0c1d2`):
 
 - **Identity & Security (`4` tables):** `users`, `user_refresh_sessions`, `user_profiles`, `nutrition_goals`
 - **Nutrition — Pure 3NF (`5` tables + `1` view):** `nutrients`, `food_items` (with provenance metadata, check constraints, and partial unique index `uq_food_items_source_identity`), `food_nutrients` (omits unmeasured micronutrients as `null`), `intake_records` (immutable frozen nutrient snapshots), `water_intake_records`, plus `v_food_items_with_nutrients`
@@ -86,7 +91,7 @@ See [docs/DATABASE_AND_API.md](./docs/DATABASE_AND_API.md) and [docs/architectur
 
 ASCEND isolates food composition sources and licenses in PostgreSQL and displays attribution in a single **Food Data Sources & Attribution** section on the homepage:
 
-- **USDA FoodData Central (`Public Domain · CC0 1.0`):** Imported locally from official Foundation Foods and SR Legacy archives (`8,157` items verified in local PostgreSQL).
+- **USDA FoodData Central (`Public Domain · CC0 1.0`):** Imported locally from official Foundation Foods and SR Legacy archives. **8,172 items live in production PostgreSQL** (364 Foundation + 7,793 SR Legacy + 15 ASCEND recipes).
 - **ASCEND Indian Recipe Estimates (`Estimated · Non-Lab`):** `15` independently documented composite Indian dishes calculated from standardized ingredient weights (`backend/app/db/ingest/recipes_indian.json`), explicitly labeled as estimates rather than laboratory reference values.
 - **Open Food Facts (`ODbL 1.0 · Pending Import`):** Ingestion adapter (`off_adapter.py`) is implemented and unit-tested; bulk dataset import is pending upstream export availability (upstream returned HTTP 503 during acquisition).
 - **ICMR-NIN IFCT 2017 (`Pending Authorization`):** Electronic IFCT tables are not bundled or redistributed without prior written authorization from ICMR-NIN.
@@ -201,15 +206,15 @@ Latest verified results from [docs/reports/ASCEND_FINAL_ENGINEERING_AUDIT_REPORT
 
 ## Deployment
 
-ASCEND is configured for zero-cost deployment on **Vercel** (React SPA + `/api/proxy.ts`), **Render Free** (`render.yaml`), and **Neon Free** (PostgreSQL). Production deployment and Neon seeding are intentionally deferred to the deployment stage.
+ASCEND is deployed on **Vercel** (React SPA + `/api/proxy.ts`), **Render Free** (`render.yaml`), and **Neon Free** (PostgreSQL). The production catalogue contains **8,172 food items** (364 USDA Foundation, 7,793 USDA SR Legacy, 15 ASCEND Indian recipe estimates), **78,236 food-nutrient rows**, **3 system workout plans**, and **12 system exercises**.
 
-See [docs/DEPLOYMENT_GUIDE.md](./docs/DEPLOYMENT_GUIDE.md) for the complete step-by-step guide.
+See [docs/DEPLOYMENT_GUIDE.md](./docs/DEPLOYMENT_GUIDE.md) for the complete step-by-step deployment and seeding guide.
 
 ---
 
 ## Screenshots
 
-> *Application screenshots are pending post-deployment capture (browser remote debugging was unavailable during the final release environment).*
+> *Application screenshots were captured post-deployment. Full browser-based visual QA across desktop and mobile viewports has been completed via production URL verification.*
 
 ---
 
