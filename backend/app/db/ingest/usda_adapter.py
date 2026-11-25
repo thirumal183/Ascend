@@ -138,6 +138,17 @@ def parse_usda_archive(
 
         prep_state = infer_preparation_state(description, default="cooked")
         data_type = item.get("dataType") or dataset_label
+        is_foundation = data_type.lower() == "foundation"
+        verification_status = "lab_verified" if is_foundation else "unverified"
+        attribution = (
+            "U.S. Department of Agriculture, Agricultural Research Service. "
+            f"FoodData Central, {data_type} (https://fdc.nal.usda.gov/). Public Domain (CC0 1.0)."
+        )
+        default_note = (
+            f"Official Foundation Foods analytical reference (FDC ID {fdc_id})."
+            if is_foundation
+            else f"Official SR Legacy (2018-04) compiled reference — mixed analytical, calculated & formulation values (FDC ID {fdc_id})."
+        )
 
         count += 1
         yield NormalizedFoodRecord(
@@ -153,11 +164,11 @@ def parse_usda_archive(
             reference_label=f"100g {prep_state}",
             grams_per_serving=grams_per_serving,
             edible_portion_pct=100.0,
-            data_note=serving_note or f"Official {data_type} record (FDC ID {fdc_id}).",
+            data_note=serving_note or default_note,
             source_provider="usda_fdc",
             source_external_id=str(fdc_id),
             license_type="CC0-1.0",
-            verification_status="lab_verified",
-            source_attribution=USDA_ATTRIBUTION,
+            verification_status=verification_status,
+            source_attribution=attribution,
             nutrients=nutrients,
         )

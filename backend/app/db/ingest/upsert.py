@@ -39,7 +39,20 @@ async def upsert_food_records(
         dry_run=dry_run,
     )
 
-    nutrient_map = await ensure_canonical_nutrients(db)
+    nutrient_map = {} if dry_run else await ensure_canonical_nutrients(db)
+    existing_ids_in_db: set[str] = set()
+    if dry_run:
+        existing_ids_in_db = set(
+            (
+                await db.scalars(
+                    select(FoodItem.source_external_id).where(
+                        FoodItem.is_custom_user_food == False,  # noqa: E712
+                        FoodItem.source_provider == source_provider,
+                        FoodItem.source_external_id.is_not(None),
+                    )
+                )
+            ).all()
+        )
     seen_external_ids: set[str] = set()
 
     for rec in records:
@@ -66,7 +79,10 @@ async def upsert_food_records(
         seen_external_ids.add(rec.source_external_id)
 
         if dry_run:
-            summary.imported += 1
+            if rec.source_external_id in existing_ids_in_db:
+                summary.updated += 1
+            else:
+                summary.imported += 1
             continue
 
         existing_stmt = (
